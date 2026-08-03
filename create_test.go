@@ -34,6 +34,8 @@ func TestCreateCertificate_SelfSigned(t *testing.T) {
 		CurveOID:     curveOID,
 		Signer:       signer,
 
+		RandReader: rand.Reader,
+
 		Algorithm:     algorithm.AlgoR341012_256,
 		SignAlgorithm: algorithm.AlgoR341012_256,
 
@@ -48,9 +50,6 @@ func TestCreateCertificate_SelfSigned(t *testing.T) {
 
 	cert, err := CreateCertificate(opts)
 	assert.NoError(t, err, "failed to create certificate")
-	assert.NotNil(t, cert, "expected certificate to be created")
-
-	assert.NoError(t, err, "failed to parse test cert")
 	assert.NotNil(t, cert, "test cert should not be nil")
 	assert.NotNil(t, cert.cert.IsGOST, "expected GOST certificate")
 	assert.NotNil(t, cert.cert.Stdlib, "expected parsed Stdlib")
@@ -60,7 +59,7 @@ func TestCreateCertificate_SelfSigned(t *testing.T) {
 	assert.Equal(t, cert.cert.GOSTAlgo, algorithm.AlgoR341012_256, "expected AlgoR341012_256 algorithm")
 	assert.Equal(t, cert.cert.SigGOSTAlgo, algorithm.AlgoR341012_256, "expected AlgoR341012_256 signature algorithm")
 
-	// ── Verify via x509gost ───────────────────────────────────────────────
+	// Verify via x509gost
 	chains, err := cert.cert.Verify(x509gost.VerifyOptions{
 		GOSTRoots: []*x509gost.Certificate{cert.cert},
 	})

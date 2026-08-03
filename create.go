@@ -9,29 +9,22 @@ import (
 )
 
 // CreateCertificate creates a new DER-encoded GOST X.509 certificate.
-//
-// Параметры:
-//   - rand — источник энтропии (передаётся в signer.Sign).
-//   - template — шаблон сертификата (Subject, SerialNumber, NotBefore/NotAfter,
-//     ExtraExtensions и т.д.).
-//   - parent — вышестоящий сертификат (issuer): его RawSubject становится
-//     Issuer полем выпускаемого сертификата.
-//   - pubKeyRaw — сырые байты публичного ключа субъекта LE(X)||LE(Y).
-//   - signer — подписант (issuer), реализующий crypto.Signer. Sign() должен
-//     возвращать raw GOST signature bytes (R||S в LE).
-//   - curveOID — OID кривой (напр. x509gost.OIDParamTC26_256A).
-//   - algo — алгоритм ключа субъекта (x509gost.GOSTAlgorithm).
-//   - sigAlgo — алгоритм подписи, определяет хеш TBSCertificate.
 func CreateCertificate(opts *options.CreateCertificateOptions) (*Certificate, error) {
 	template := opts.BuildTemplateCertificate()
 
+	parentCert := template
+	if opts.ParentCertificate != nil {
+		parentCert = opts.ParentCertificate
+	}
+
+	// Create sig DER algorithm
 	sigAlgoDER, err := internal.BuildSignatureAlgorithm(opts.SignAlgorithm)
 	if err != nil {
 		return nil, fmt.Errorf("CreateCertificate: build sig algo: %w", err)
 	}
 
 	// Create TBS Certificate raw body by concatenation
-	tbsBody, err := internal.BuildTBSCertificate(opts, template, opts.ParentCertificate, sigAlgoDER)
+	tbsBody, err := internal.BuildTBSCertificate(opts, template, parentCert, sigAlgoDER)
 	if err != nil {
 		return nil, fmt.Errorf("CreateCertificate: build tbs certificate: %w", err)
 	}

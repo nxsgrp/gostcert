@@ -26,8 +26,7 @@ type CreateCertificateOptions struct {
 	RawPublicKey  []byte
 	RawPrivateKey []byte
 
-	ParentCertificate   *x509.Certificate
-	TemplateCertificate *x509.Certificate
+	ParentCertificate *x509.Certificate
 
 	SerialNumber *big.Int
 	TTL          time.Duration // secs

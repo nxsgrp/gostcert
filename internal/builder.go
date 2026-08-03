@@ -133,8 +133,18 @@ func BuildTBSCertificate(
 	template, parent *x509.Certificate,
 	sigAlgoDER []byte,
 ) ([]byte, error) {
-	subjectDER := template.RawSubject
+	subjectDER, err := asn1.Marshal(template.Subject.ToRDNSequence())
+	if err != nil {
+		return nil, fmt.Errorf("CreateCertificate: marshal Subject: %w", err)
+	}
+
 	issuerDER := parent.RawSubject
+	if len(issuerDER) == 0 {
+		issuerDER, err = asn1.Marshal(parent.Subject.ToRDNSequence())
+		if err != nil {
+			return nil, fmt.Errorf("CreateCertificate: marshal Issuer: %w", err)
+		}
+	}
 
 	spki, err := BuildSPKI(opts.RawPublicKey, opts.CurveOID, opts.Algorithm)
 	if err != nil {
