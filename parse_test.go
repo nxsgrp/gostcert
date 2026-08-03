@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/nxsgrp/gostcert/algorithm"
+	"github.com/nxsgrp/gostcert/internal/algorithm"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -18,15 +18,15 @@ func TestParseCertificate(t *testing.T) {
 	cert, err := ParseCertificate(derBytes)
 	assert.NoError(t, err, "failed to parse test cert")
 	assert.NotNil(t, cert, "test cert should not be nil")
-	assert.NotNil(t, cert.IsGOST, "expected GOST certificate")
-	assert.NotNil(t, cert.Stdlib, "expected parsed Stdlib")
-	assert.NotEmpty(t, cert.Raw, "expected cert raw bytes is not empty")
-	assert.NotEmpty(t, cert.PublicKeyRaw, "expected cert public key is not empty")
-	assert.NotEmpty(t, cert.Stdlib.Subject.CommonName, "expected subject common name is not empty")
-	assert.Equal(t, cert.GOSTAlgorithm, algorithm.AlgoR341012_256, "expected AlgoR341012_256 algorithm")
-	assert.Equal(t, cert.SigGOSTAlgorithm, algorithm.AlgoR341012_256, "expected AlgoR341012_256 signature algorithm")
+	assert.NotNil(t, cert.cert.IsGOST, "expected GOST certificate")
+	assert.NotNil(t, cert.cert.Stdlib, "expected parsed Stdlib")
+	assert.NotEmpty(t, cert.cert.Raw, "expected cert raw bytes is not empty")
+	assert.NotEmpty(t, cert.cert.PubKeyRaw, "expected cert public key is not empty")
+	assert.NotEmpty(t, cert.cert.Stdlib.Subject.CommonName, "expected subject common name is not empty")
+	assert.Equal(t, cert.cert.GOSTAlgo, algorithm.AlgoR341012_256, "expected AlgoR341012_256 algorithm")
+	assert.Equal(t, cert.cert.SigGOSTAlgo, algorithm.AlgoR341012_256, "expected AlgoR341012_256 signature algorithm")
 
-	stdCert := cert.Stdlib
+	stdCert := cert.StdCertificate()
 	t.Logf("Certificate has been parsed successfully")
 	t.Logf(" -> Subject: %s\n", stdCert.Subject)
 	t.Logf(" -> Issuer:  %s\n", stdCert.Issuer)
