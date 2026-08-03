@@ -3,7 +3,6 @@ package gostcert
 import (
 	"fmt"
 
-	"github.com/nxsgrp/gostcert/internal"
 	"github.com/tarantool/go-gostcrypto/x509gost"
 )
 
@@ -19,15 +18,7 @@ func ParseCertificate(der []byte) (*Certificate, error) {
 	}
 
 	cert := &Certificate{
-		Stdlib:           gc.Stdlib,
-		Raw:              gc.Raw,
-		IsGOST:           gc.IsGOST,
-		HasGOSTPublicKey: gc.HasGOSTPubKey,
-		GOSTAlgorithm:    internal.MapAlgorithm(gc.GOSTAlgo),
-		SigGOSTAlgorithm: internal.MapAlgorithm(gc.SigGOSTAlgo),
-		PublicKeyRaw:     gc.PubKeyRaw,
-		CurveOID:         gc.CurveOID,
-		SPKIAlgorithmDER: gc.SPKIAlgorithmDER,
+		cert: gc,
 	}
 
 	return cert, nil
