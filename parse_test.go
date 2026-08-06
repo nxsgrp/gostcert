@@ -4,8 +4,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/nxsgrp/gostcert/internal/algorithm"
 	"github.com/stretchr/testify/assert"
+	"github.com/tarantool/go-gostcrypto/x509gost"
 )
 
 const testCertPath = "test/resources/certs/certificate.der"
@@ -23,8 +23,8 @@ func TestParseCertificate(t *testing.T) {
 	assert.NotEmpty(t, cert.cert.Raw, "expected cert raw bytes is not empty")
 	assert.NotEmpty(t, cert.cert.PubKeyRaw, "expected cert public key is not empty")
 	assert.NotEmpty(t, cert.cert.Stdlib.Subject.CommonName, "expected subject common name is not empty")
-	assert.Equal(t, cert.cert.GOSTAlgo, algorithm.AlgoR341012_256, "expected AlgoR341012_256 algorithm")
-	assert.Equal(t, cert.cert.SigGOSTAlgo, algorithm.AlgoR341012_256, "expected AlgoR341012_256 signature algorithm")
+	assert.Equal(t, cert.cert.GOSTAlgo, x509gost.AlgoR341012_256, "expected AlgoR341012_256 algorithm")
+	assert.Equal(t, cert.cert.SigGOSTAlgo, x509gost.AlgoR341012_256, "expected AlgoR341012_256 signature algorithm")
 
 	stdCert := cert.StdCertificate()
 	t.Logf("Certificate has been parsed successfully")
