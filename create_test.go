@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/nxsgrp/gostcert/internal"
-	"github.com/nxsgrp/gostcert/internal/algorithm"
 	"github.com/nxsgrp/gostcert/internal/options"
 	"github.com/stretchr/testify/assert"
 	gost "github.com/tarantool/go-gostcrypto"
@@ -41,8 +40,8 @@ func TestCreateCertificate_SelfSigned(t *testing.T) {
 
 		RandReader: rand.Reader,
 
-		Algorithm:     algorithm.AlgoR341012_256,
-		SignAlgorithm: algorithm.AlgoR341012_256,
+		Algorithm:     x509gost.AlgoR341012_256,
+		SignAlgorithm: x509gost.AlgoR341012_256,
 
 		RawPrivateKey: privRaw,
 		RawPublicKey:  pubRaw,

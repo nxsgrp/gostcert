@@ -8,7 +8,21 @@ import (
 	"github.com/nxsgrp/gostcert/internal/options"
 )
 
-// CreateCertificate creates a new DER-encoded GOST X.509 certificate.
+// CreateCertificate creates a new DER-encoded GOST X.509 certificate and
+// returns a parsed Certificate wrapper.
+//
+// The certificate is built from the provided options: template fields (subject,
+// serial number, validity), public key (RawPublicKey), signature and key
+// algorithm identifiers, and the key material for signing.
+//
+// If opts.ParentCertificate is set the issued certificate uses the parent's
+// subject as the Issuer field (CA-issued certificate). Otherwise the
+// certificate is self-issued (Issuer = Subject).
+//
+// The function assembles the TBSCertificate DER body, signs it with the
+// provided crypto.Signer (which may wrap a hardware token), wraps the
+// result in the SignedCertificate SEQUENCE, and re-parses the DER output
+// through ParseCertificate before returning.
 func CreateCertificate(opts *options.CreateCertificateOptions) (*Certificate, error) {
 	template := opts.BuildTemplateCertificate()
 

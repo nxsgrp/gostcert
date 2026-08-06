@@ -8,45 +8,54 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/nxsgrp/gostcert/internal/algorithm"
 	"github.com/nxsgrp/gostcert/internal/options"
 	gost "github.com/tarantool/go-gostcrypto"
+	"github.com/tarantool/go-gostcrypto/x509gost"
 )
 
 // Ensure big is used (for SerialNumber type)
 var _ = big.NewInt(0)
 
-// ASN.1 structures for DER building (internal, not exported).
-
+// derEncodedAlgorithmIdentifier is a minimal ASN.1 container for an
+// AlgorithmIdentifier that carries only the OID and no parameters.
+// Used for signature AlgorithmIdentifiers per GOST conventions.
 type derEncodedAlgorithmIdentifier struct {
 	AlgorithmIdentifier asn1.ObjectIdentifier
 }
 
+// extension is an ASN.1 representation of a single X.509v3 extension,
+// matching the Extension SEQUENCE defined in RFC 5280.
 type extension struct {
 	ID       asn1.ObjectIdentifier
 	Value    asn1.RawValue
 	Critical bool `asn1:"optional"`
 }
 
+// validatedDER is an ASN.1 container for the Validity SEQUENCE
+// (notBefore and notAfter) inside a TBSCertificate.
 type validatedDER struct {
 	NotBefore time.Time
 	NotAfter  time.Time
 }
 
-// HashForGOST hashes data with the GOST hash algorithm implied by algo
-// and returns the digest in little-endian byte order (GOST signing convention).
-func HashForGOST(algo algorithm.GOSTAlgorithm, data []byte) ([]byte, error) {
+// HashForGOST hashes data with the GOST hash algorithm corresponding to
+// the given GOSTAlgorithm and returns the digest in little-endian byte order.
+//
+// GOST R 34.10 reads the digest as a little-endian integer ("alpha").
+// Go's hash.Hash.Sum outputs big-endian bytes, so this function reverses
+// them before returning.
+func HashForGOST(algo x509gost.GOSTAlgorithm, data []byte) ([]byte, error) {
 	var h interface {
 		Write([]byte) (int, error)
 		Sum([]byte) []byte
 	}
 
 	switch algo {
-	case algorithm.AlgoR341001:
+	case x509gost.AlgoR341001:
 		h = gost.NewGOSTR341194CryptoProHash()
-	case algorithm.AlgoR341012_256:
+	case x509gost.AlgoR341012_256:
 		h = gost.NewStreebog256Hash()
-	case algorithm.AlgoR341012_512:
+	case x509gost.AlgoR341012_512:
 		h = gost.NewStreebog512Hash()
 	default:
 		return nil, fmt.Errorf("hashForGOST: unknown GOSTAlgorithm %d", int(algo))
@@ -65,9 +74,10 @@ func HashForGOST(algo algorithm.GOSTAlgorithm, data []byte) ([]byte, error) {
 	return digestLE, nil
 }
 
-// BuildExtensions serializes a slice of pkix.Extension into the
-// [3] EXPLICIT Extensions field of TBSCertificate.
-// Returns nil if extensions is empty.
+// BuildExtensions serializes a slice of pkix.Extension into the DER-encoded
+// [3] EXPLICIT Extensions field of TBSCertificate (RFC 5280, section 4.1.2.9).
+//
+// Returns nil, nil if extensions is empty (no extensions tag is written).
 func BuildExtensions(extensions []pkix.Extension) ([]byte, error) {
 	if len(extensions) == 0 {
 		return nil, nil
@@ -116,6 +126,8 @@ func BuildExtensions(extensions []pkix.Extension) ([]byte, error) {
 	return expl, nil
 }
 
+// ConcatBytes concatenates multiple byte slices into a single contiguous slice.
+// It pre-allocates the full size to avoid reallocation.
 func ConcatBytes(parts ...[]byte) []byte {
 	total := 0
 	for _, p := range parts {
@@ -128,6 +140,19 @@ func ConcatBytes(parts ...[]byte) []byte {
 	return out
 }
 
+// BuildTBSCertificate assembles the DER-encoded body of the
+// TBSCertificate SEQUENCE (RFC 5280, section 4.1.2).
+//
+// The returned bytes include, in order:
+//   - version [0] EXPLICIT INTEGER (v3)
+//   - serialNumber
+//   - signature (AlgorithmIdentifier)
+//   - issuer (RawSubject from parent, or marshalled Subject)
+//   - validity (notBefore, notAfter)
+//   - subject
+//   - subjectPublicKeyInfo (via BuildSPKI)
+//
+// Extensions are not included here; the caller appends them separately.
 func BuildTBSCertificate(
 	opts *options.CreateCertificateOptions,
 	template, parent *x509.Certificate,
