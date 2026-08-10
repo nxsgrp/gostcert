@@ -2,6 +2,7 @@ package gostcert
 
 import (
 	"crypto/rand"
+	"math"
 	"math/big"
 	"os"
 	"testing"
@@ -16,6 +17,8 @@ import (
 
 const (
 	newTestCertPath = "test/resources/certs/created-certificate.der"
+
+	serialNumber int64 = math.MaxInt64
 )
 
 func TestCreateCertificate_SelfSigned(t *testing.T) {
@@ -34,20 +37,26 @@ func TestCreateCertificate_SelfSigned(t *testing.T) {
 	signer := &internal.Signer{RawPrivateKey: privRaw, CurveOID: curveOID}
 
 	opts := &options.CreateCertificateOptions{
-		SerialNumber: big.NewInt(1),
-		CurveOID:     curveOID,
-		Signer:       signer,
+		SerialNumber: big.NewInt(serialNumber),
 
-		RandReader: rand.Reader,
+		Subject: options.SubjectOptions{
+			CommonName:   "GOST R 34.10-2012 Test Certificate",
+			Country:      []string{"RU"},
+			Organization: []string{"Test"},
+		},
 
-		Algorithm:     x509gost.AlgoR341012_256,
-		SignAlgorithm: x509gost.AlgoR341012_256,
+		Crypto: options.CryptoOptions{
+			CurveOID: curveOID,
+			Signer:   signer,
+
+			RandReader: rand.Reader,
+
+			Algorithm:     x509gost.AlgoR341012_256,
+			SignAlgorithm: x509gost.AlgoR341012_256,
+		},
 
 		RawPrivateKey: privRaw,
 		RawPublicKey:  pubRaw,
-
-		SubjectName:  "GOST R 34.10-2012 Test Certificate",
-		Organization: []string{"Test organization"},
 
 		TTL: 365 * 24 * time.Hour,
 	}

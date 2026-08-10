@@ -8,7 +8,11 @@ import (
 	"github.com/tarantool/go-gostcrypto/x509gost"
 )
 
-const testCertPath = "test/resources/certs/certificate.der"
+const (
+	testCertPath = "test/resources/certs/certificate.der"
+
+	certSerialNumber uint64 = 11317755370480200428
+)
 
 func TestParseCertificate(t *testing.T) {
 	derBytes, err := os.ReadFile(testCertPath)
@@ -25,6 +29,8 @@ func TestParseCertificate(t *testing.T) {
 	assert.NotEmpty(t, cert.cert.Stdlib.Subject.CommonName, "expected subject common name is not empty")
 	assert.Equal(t, cert.cert.GOSTAlgo, x509gost.AlgoR341012_256, "expected AlgoR341012_256 algorithm")
 	assert.Equal(t, cert.cert.SigGOSTAlgo, x509gost.AlgoR341012_256, "expected AlgoR341012_256 signature algorithm")
+
+	assert.Equal(t, cert.cert.Stdlib.SerialNumber.Uint64(), certSerialNumber, "expected serial number is not equal")
 
 	stdCert := cert.StdCertificate()
 	t.Logf("Certificate has been parsed successfully")

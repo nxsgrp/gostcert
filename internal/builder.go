@@ -68,7 +68,7 @@ func BuildTBSCertificate(
 		}
 	}
 
-	spki, err := BuildSPKI(opts.RawPublicKey, opts.CurveOID, opts.Algorithm)
+	spki, err := BuildSPKI(opts.RawPublicKey, opts.Crypto.CurveOID, opts.Crypto.Algorithm)
 	if err != nil {
 		return nil, fmt.Errorf("CreateCertificate: %w", err)
 	}

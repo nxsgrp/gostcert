@@ -32,7 +32,7 @@ func CreateCertificate(opts *options.CreateCertificateOptions) (*Certificate, er
 	}
 
 	// Create sig DER algorithm
-	sigAlgoDER, err := internal.BuildSignatureAlgorithm(opts.SignAlgorithm)
+	sigAlgoDER, err := internal.BuildSignatureAlgorithm(opts.Crypto.SignAlgorithm)
 	if err != nil {
 		return nil, fmt.Errorf("CreateCertificate: build sig algo: %w", err)
 	}
@@ -65,12 +65,12 @@ func CreateCertificate(opts *options.CreateCertificateOptions) (*Certificate, er
 	}
 
 	// Sign temp certificate
-	digestLE, err := internal.HashForGOST(opts.SignAlgorithm, tbsDER)
+	digestLE, err := internal.HashForGOST(opts.Crypto.SignAlgorithm, tbsDER)
 	if err != nil {
 		return nil, fmt.Errorf("CreateCertificate: hash: %w", err)
 	}
 
-	sig, err := opts.Signer.Sign(opts.RandReader, digestLE, nil)
+	sig, err := opts.Crypto.Signer.Sign(opts.Crypto.RandReader, digestLE, nil)
 	if err != nil {
 		return nil, fmt.Errorf("CreateCertificate: sign: %w", err)
 	}
