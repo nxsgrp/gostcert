@@ -24,10 +24,13 @@ type derEncodedAlgorithmIdentifier struct {
 
 // extension is an ASN.1 representation of a single X.509v3 extension,
 // matching the Extension SEQUENCE defined in RFC 5280.
+//
+// The field order follows the ASN.1 definition: extnID, critical (optional),
+// extnValue (OCTET STRING).
 type extension struct {
 	ID       asn1.ObjectIdentifier
-	Value    asn1.RawValue
 	Critical bool `asn1:"optional"`
+	Value    asn1.RawValue
 }
 
 // validatedDER is an ASN.1 container for the Validity SEQUENCE

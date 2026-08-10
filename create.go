@@ -1,6 +1,8 @@
 package gostcert
 
 import (
+	"crypto/sha1"
+	"crypto/x509/pkix"
 	"encoding/asn1"
 	"fmt"
 
@@ -36,6 +38,9 @@ func CreateCertificate(opts *options.CreateCertificateOptions) (*Certificate, er
 	if err != nil {
 		return nil, fmt.Errorf("CreateCertificate: build sig algo: %w", err)
 	}
+
+	// Build standard X.509v3 extensions.
+	template.ExtraExtensions = buildStandardExtensions(opts)
 
 	// Create TBS Certificate raw body by concatenation
 	tbsBody, err := internal.BuildTBSCertificate(opts, template, parentCert, sigAlgoDER)
@@ -107,4 +112,30 @@ func CreateCertificate(opts *options.CreateCertificateOptions) (*Certificate, er
 	}
 
 	return cert, nil
+}
+
+// buildStandardExtensions builds the standard X.509v3 extensions for a
+// GOST certificate: BasicConstraints (CA=true), SubjectKeyIdentifier, and
+// AuthorityKeyIdentifier.
+//
+// For self-issued certificates the AuthorityKeyIdentifier uses the same
+// key identifier as SubjectKeyIdentifier.
+func buildStandardExtensions(opts *options.CreateCertificateOptions) []pkix.Extension {
+	// Compute SubjectKeyIdentifier: SHA-1 of the raw public key bytes.
+	skiHash := sha1.Sum(opts.RawPublicKey)
+	skiRaw := skiHash[:]
+
+	bc := internal.BuildBasicConstraintsExtension(true)
+	ski := internal.BuildSubjectKeyIdentifierExtension(skiRaw)
+
+	var akiValue []byte
+	if opts.ParentCertificate != nil {
+		akiValue = nil
+	} else {
+		akiValue = skiRaw
+	}
+
+	aki := internal.BuildAuthorityKeyIdentifierExtension(akiValue)
+
+	return []pkix.Extension{bc, ski, aki}
 }
