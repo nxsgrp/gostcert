@@ -2,7 +2,6 @@ package gostcert
 
 import (
 	"crypto/rand"
-	"math"
 	"math/big"
 	"os"
 	"testing"
@@ -17,13 +16,18 @@ import (
 
 const (
 	newTestCertPath = "test/resources/certs/created-certificate.der"
-
-	serialNumber int64 = math.MaxInt64
 )
 
 func TestCreateCertificate_SelfSigned(t *testing.T) {
-	// Generate a GOST 2012-256 keypair
-	curveOID := x509gost.OIDParamTC26_256A
+	// Generate a random 20-byte serial number (matching OpenSSL convention).
+	serialBytes := make([]byte, 20)
+	_, err := rand.Read(serialBytes)
+	assert.NoError(t, err, "failed to generate serial number")
+	serialNumber := new(big.Int).SetBytes(serialBytes)
+
+	// Use the CryptoPro-A curve parameter set (matches the reference
+	// openssl-generated certificate).
+	curveOID := x509gost.OIDParamCryptoProA
 	curve, err := gost.CurveByOID(curveOID)
 	assert.NoError(t, err, "failed to generate curve oid")
 
@@ -37,7 +41,7 @@ func TestCreateCertificate_SelfSigned(t *testing.T) {
 	signer := &internal.Signer{RawPrivateKey: privRaw, CurveOID: curveOID}
 
 	opts := &options.CreateCertificateOptions{
-		SerialNumber: big.NewInt(serialNumber),
+		SerialNumber: serialNumber,
 
 		Subject: options.SubjectOptions{
 			CommonName:   "GOST R 34.10-2012 Test Certificate",
