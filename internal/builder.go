@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/nxsgrp/gostcert/internal/options"
-	gost "github.com/tarantool/go-gostcrypto"
 	"github.com/tarantool/go-gostcrypto/x509gost"
 )
 
@@ -36,108 +35,6 @@ type extension struct {
 type validatedDER struct {
 	NotBefore time.Time
 	NotAfter  time.Time
-}
-
-// HashForGOST hashes data with the GOST hash algorithm corresponding to
-// the given GOSTAlgorithm and returns the digest in little-endian byte order.
-//
-// GOST R 34.10 reads the digest as a little-endian integer ("alpha").
-// Go's hash.Hash.Sum outputs big-endian bytes, so this function reverses
-// them before returning.
-func HashForGOST(algo x509gost.GOSTAlgorithm, data []byte) ([]byte, error) {
-	var h interface {
-		Write([]byte) (int, error)
-		Sum([]byte) []byte
-	}
-
-	switch algo {
-	case x509gost.AlgoR341001:
-		h = gost.NewGOSTR341194CryptoProHash()
-	case x509gost.AlgoR341012_256:
-		h = gost.NewStreebog256Hash()
-	case x509gost.AlgoR341012_512:
-		h = gost.NewStreebog512Hash()
-	default:
-		return nil, fmt.Errorf("hashForGOST: unknown GOSTAlgorithm %d", int(algo))
-	}
-
-	_, _ = h.Write(data)
-	digest := h.Sum(nil)
-
-	// GOST R 34.10 reads the digest as a little-endian integer "alpha".
-	// Go's hash.Sum outputs big-endian bytes; reverse them.
-	digestLE := make([]byte, len(digest))
-	for i := range digest {
-		digestLE[len(digest)-1-i] = digest[i]
-	}
-
-	return digestLE, nil
-}
-
-// BuildExtensions serializes a slice of pkix.Extension into the DER-encoded
-// [3] EXPLICIT Extensions field of TBSCertificate (RFC 5280, section 4.1.2.9).
-//
-// Returns nil, nil if extensions is empty (no extensions tag is written).
-func BuildExtensions(extensions []pkix.Extension) ([]byte, error) {
-	if len(extensions) == 0 {
-		return nil, nil
-	}
-
-	var derExtension [][]byte
-	for _, pkixExt := range extensions {
-		extData, err := asn1.Marshal(extension{
-			ID:       pkixExt.Id,
-			Critical: pkixExt.Critical,
-			Value: asn1.RawValue{
-				FullBytes: pkixExt.Value,
-			},
-		})
-
-		if err != nil {
-			return nil, fmt.Errorf("buildExtension: marshal extension %v: %w", pkixExt.Id, err)
-		}
-
-		derExtension = append(derExtension, extData)
-	}
-
-	// Extensions ::= SEQUENCE OF Extension
-	seq, err := asn1.Marshal(asn1.RawValue{
-		Class:      asn1.ClassUniversal,
-		Tag:        asn1.TagSequence,
-		IsCompound: true,
-		Bytes:      ConcatBytes(derExtension...),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("buildExtension: marshal sequence: %w", err)
-	}
-
-	// [3] EXPLICIT
-	expl, err := asn1.Marshal(asn1.RawValue{
-		Class:      asn1.ClassContextSpecific,
-		Tag:        3,
-		IsCompound: true,
-		Bytes:      seq,
-	})
-
-	if err != nil {
-		return nil, fmt.Errorf("buildExtension: marshal explicit: %w", err)
-	}
-
-	return expl, nil
-}
-
-// ConcatBytes concatenates multiple byte slices into a single contiguous slice.
-// It pre-allocates the full size to avoid reallocation.
-func ConcatBytes(parts ...[]byte) []byte {
-	total := 0
-	for _, p := range parts {
-		total += len(p)
-	}
-	out := make([]byte, 0, total)
-	for _, p := range parts {
-		out = append(out, p...)
-	}
-	return out
 }
 
 // BuildTBSCertificate assembles the DER-encoded body of the
@@ -216,4 +113,98 @@ func BuildTBSCertificate(
 	)
 
 	return tbsBody, nil
+}
+
+// HashForGOST hashes data with the GOST hash algorithm corresponding to
+// the given GOST algorithm and returns the digest in little-endian byte order.
+//
+// GOST R 34.10 reads the digest as a little-endian integer ("alpha").
+// Go's hash.Hash.Sum outputs big-endian bytes, so this function reverses
+// them before returning.
+func HashForGOST(algo x509gost.GOSTAlgorithm, data []byte) ([]byte, error) {
+	h, err := GostAlgorithmToHash(algo)
+	if err != nil {
+		return nil, fmt.Errorf("hashForGOST: failed to get hasher %w", err)
+	}
+
+	_, err = h.Write(data)
+	if err != nil {
+		return nil, fmt.Errorf("hashForGOST: faile to write hash data %w", err)
+	}
+	digest := h.Sum(nil)
+
+	// GOST R 34.10 reads the digest as a little-endian integer "alpha".
+	// Go's hash.Sum outputs big-endian bytes; reverse them.
+	digestLE := make([]byte, len(digest))
+	for i := range digest {
+		digestLE[len(digest)-1-i] = digest[i]
+	}
+
+	return digestLE, nil
+}
+
+// BuildExtensions serializes a slice of pkix.Extension into the DER-encoded
+// [3] EXPLICIT Extensions field of TBSCertificate (RFC 5280, section 4.1.2.9).
+//
+// Returns nil, nil if extensions is empty (no extensions tag is written).
+func BuildExtensions(extensions []pkix.Extension) ([]byte, error) {
+	if len(extensions) == 0 {
+		return nil, nil
+	}
+
+	var derExtension [][]byte
+	for _, pkixExt := range extensions {
+		extData, err := asn1.Marshal(extension{
+			ID:       pkixExt.Id,
+			Critical: pkixExt.Critical,
+			Value: asn1.RawValue{
+				FullBytes: pkixExt.Value,
+			},
+		})
+
+		if err != nil {
+			return nil, fmt.Errorf("buildExtension: marshal extension %v: %w", pkixExt.Id, err)
+		}
+
+		derExtension = append(derExtension, extData)
+	}
+
+	// Extensions ::= SEQUENCE OF Extension
+	seq, err := asn1.Marshal(asn1.RawValue{
+		Class:      asn1.ClassUniversal,
+		Tag:        asn1.TagSequence,
+		IsCompound: true,
+		Bytes:      ConcatBytes(derExtension...),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("buildExtension: marshal sequence: %w", err)
+	}
+
+	// [3] EXPLICIT
+	expl, err := asn1.Marshal(asn1.RawValue{
+		Class:      asn1.ClassContextSpecific,
+		Tag:        3,
+		IsCompound: true,
+		Bytes:      seq,
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("buildExtension: marshal explicit: %w", err)
+	}
+
+	return expl, nil
+}
+
+// ConcatBytes concatenates multiple byte slices into a single contiguous slice.
+// It pre-allocates the full size to avoid reallocation.
+func ConcatBytes(parts ...[]byte) []byte {
+	total := 0
+	for _, p := range parts {
+		total += len(p)
+	}
+	out := make([]byte, 0, total)
+	for _, p := range parts {
+		out = append(out, p...)
+	}
+	return out
 }

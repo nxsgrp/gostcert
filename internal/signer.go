@@ -26,6 +26,7 @@ type Signer struct {
 // The returned value is LE(X) || LE(Y) — the concatenation of the X and Y
 // coordinates in little-endian byte order, matching the GOST representation.
 func (s *Signer) Public() crypto.PublicKey {
+	// TODO: how pass errors and satisfy crypto.PublicKey iface?
 	gostCurveOID, _ := gost.CurveByOID(s.CurveOID)
 	rawPublicKey, _ := gost.PublicKeyRawFromPrivate(gostCurveOID, s.RawPrivateKey)
 	return rawPublicKey
