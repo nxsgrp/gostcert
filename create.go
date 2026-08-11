@@ -7,7 +7,7 @@ import (
 	"fmt"
 
 	"github.com/nxsgrp/gostcert/internal"
-	"github.com/nxsgrp/gostcert/internal/options"
+	"github.com/nxsgrp/gostcert/options"
 )
 
 // CreateCertificate creates a new DER-encoded GOST X.509 certificate and

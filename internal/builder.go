@@ -8,7 +8,7 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/nxsgrp/gostcert/internal/options"
+	"github.com/nxsgrp/gostcert/options"
 	"github.com/tarantool/go-gostcrypto/x509gost"
 )
 
