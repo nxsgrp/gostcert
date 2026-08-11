@@ -1,0 +1,4 @@
+*.pb.go -diff
+*.pb.*.go -diff
+*.swagger.json -diff
+*.sum -diff
