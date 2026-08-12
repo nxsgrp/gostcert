@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/nxsgrp/gostcert/internal"
-	"github.com/nxsgrp/gostcert/internal/options"
+	"github.com/nxsgrp/gostcert/options"
 	"github.com/stretchr/testify/assert"
 	gost "github.com/tarantool/go-gostcrypto"
 	"github.com/tarantool/go-gostcrypto/x509gost"
