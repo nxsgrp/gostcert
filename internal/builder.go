@@ -18,14 +18,6 @@ type derEncodedAlgorithmIdentifier struct {
 	AlgorithmIdentifier asn1.ObjectIdentifier
 }
 
-// extension is an ASN.1 representation of a single X.509v3 extension,
-// matching the Extension SEQUENCE defined in RFC 5280.
-type extension struct {
-	ID       asn1.ObjectIdentifier
-	Value    asn1.RawValue
-	Critical bool `asn1:"optional"`
-}
-
 // validatedDER is an ASN.1 container for the Validity SEQUENCE
 // (notBefore and notAfter) inside a TBSCertificate.
 type validatedDER struct {
@@ -150,12 +142,10 @@ func BuildExtensions(extensions []pkix.Extension) ([]byte, error) {
 
 	var derExtension [][]byte
 	for _, pkixExt := range extensions {
-		extData, err := asn1.Marshal(extension{
-			ID:       pkixExt.Id,
+		extData, err := asn1.Marshal(pkix.Extension{
+			Id:       pkixExt.Id,
 			Critical: pkixExt.Critical,
-			Value: asn1.RawValue{
-				FullBytes: pkixExt.Value,
-			},
+			Value:    pkixExt.Value,
 		})
 
 		if err != nil {
