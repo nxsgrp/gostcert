@@ -75,8 +75,8 @@ func BuildTBSCertificate(
 	}
 
 	validDER := validatedDER{
-		NotBefore: template.NotBefore,
-		NotAfter:  template.NotAfter,
+		NotBefore: template.NotBefore.UTC(),
+		NotAfter:  template.NotAfter.UTC(),
 	}
 
 	// Validity SEQUENCE { notBefore Time, notAfter Time }
