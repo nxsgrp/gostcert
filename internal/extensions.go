@@ -1,16 +1,18 @@
 package internal
 
 import (
+	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/asn1"
 )
 
 // ASN.1 structures for extension content encoding.
 
-// basicConstraints matches the ASN.1 BasicConstraints extension
-// (RFC 5280, section 4.2.1.9).
+// basicConstraints matches RFC 5280 §4.2.1.9.
+// The default:-1 sentinel distinguishes "not set" from pathLenConstraint=0.
 type basicConstraints struct {
-	IsCA bool `asn1:"optional"`
+	IsCA    bool `asn1:"optional"`
+	PathLen int  `asn1:"optional,default:-1"`
 }
 
 // authKeyID matches the ASN.1 AuthorityKeyIdentifier extension
@@ -25,6 +27,7 @@ var (
 	oidSubjectKeyIdentifier   = asn1.ObjectIdentifier{2, 5, 29, 14}
 	oidAuthorityKeyIdentifier = asn1.ObjectIdentifier{2, 5, 29, 35}
 	oidBasicConstraints       = asn1.ObjectIdentifier{2, 5, 29, 19}
+	oidKeyUsage               = asn1.ObjectIdentifier{2, 5, 29, 15}
 )
 
 // BuildSubjectKeyIdentifierExtension builds a SubjectKeyIdentifier extension
@@ -78,20 +81,20 @@ func BuildAuthorityKeyIdentifierExtension(keyID []byte) pkix.Extension {
 	}
 }
 
-// BuildBasicConstraintsExtension builds a BasicConstraints extension
-// marking the certificate as a CA (or not).
-//
-// Per RFC 5280, section 4.2.1.9, BasicConstraints is a SEQUENCE containing
-// an optional BOOLEAN cA and an optional INTEGER pathLenConstraint, then
-// wrapped in an OCTET STRING (the extnValue).
-func BuildBasicConstraintsExtension(isCA bool) pkix.Extension {
-	bc := basicConstraints{IsCA: isCA}
+// BuildBasicConstraintsExtension builds a BasicConstraints extension.
+// When pathLen is nil, pathLenConstraint is omitted from the ASN.1.
+// When pathLen is 0, pathLenConstraint=0 is encoded (leaf-only).
+func BuildBasicConstraintsExtension(isCA bool, pathLen *int) pkix.Extension {
+	bc := basicConstraints{IsCA: isCA, PathLen: -1}
+	if pathLen != nil {
+		bc.PathLen = *pathLen
+	}
+
 	content, err := asn1.Marshal(bc)
 	if err != nil {
 		panic("BuildBasicConstraintsExtension: " + err.Error())
 	}
 
-	// Wrap the SEQUENCE content in an OCTET STRING (extnValue).
 	value, err := asn1.Marshal(content)
 	if err != nil {
 		panic("BuildBasicConstraintsExtension: " + err.Error())
@@ -99,6 +102,67 @@ func BuildBasicConstraintsExtension(isCA bool) pkix.Extension {
 
 	return pkix.Extension{
 		Id:       oidBasicConstraints,
+		Critical: true,
+		Value:    value,
+	}
+}
+
+// BuildKeyUsageExtension builds a KeyUsage extension from a x509.KeyUsage bitmask.
+// OID 2.5.29.15, marked critical per RFC 5280.
+func BuildKeyUsageExtension(ku x509.KeyUsage) pkix.Extension {
+	var kuBytes [2]byte
+	var kuBitLen int
+
+	if ku&x509.KeyUsageDigitalSignature != 0 {
+		kuBytes[0] |= 0x80
+		kuBitLen = 1
+	}
+	if ku&x509.KeyUsageContentCommitment != 0 {
+		kuBytes[0] |= 0x40
+		kuBitLen = 2
+	}
+	if ku&x509.KeyUsageKeyEncipherment != 0 {
+		kuBytes[0] |= 0x20
+		kuBitLen = 3
+	}
+	if ku&x509.KeyUsageDataEncipherment != 0 {
+		kuBytes[0] |= 0x10
+		kuBitLen = 4
+	}
+	if ku&x509.KeyUsageKeyAgreement != 0 {
+		kuBytes[0] |= 0x08
+		kuBitLen = 5
+	}
+	if ku&x509.KeyUsageCertSign != 0 {
+		kuBytes[0] |= 0x04
+		kuBitLen = 6
+	}
+	if ku&x509.KeyUsageCRLSign != 0 {
+		kuBytes[0] |= 0x02
+		kuBitLen = 7
+	}
+	if ku&x509.KeyUsageEncipherOnly != 0 {
+		kuBytes[1] |= 0x80
+		kuBitLen = 8
+	}
+	if ku&x509.KeyUsageDecipherOnly != 0 {
+		kuBytes[1] |= 0x40
+		kuBitLen = 9
+	}
+
+	bitString := asn1.BitString{Bytes: kuBytes[:], BitLength: kuBitLen}
+	content, err := asn1.Marshal(bitString)
+	if err != nil {
+		panic("BuildKeyUsageExtension: " + err.Error())
+	}
+
+	value, err := asn1.Marshal(content)
+	if err != nil {
+		panic("BuildKeyUsageExtension: " + err.Error())
+	}
+
+	return pkix.Extension{
+		Id:       oidKeyUsage,
 		Critical: true,
 		Value:    value,
 	}
