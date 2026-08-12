@@ -40,6 +40,26 @@ type CreateCertificateOptions struct {
 	// TTL is the certificate validity duration in seconds from the
 	// current time (NotAfter = Now + TTL).
 	TTL time.Duration
+
+	// IsCA enables the CA flag in BasicConstraints extension.
+	// When true, the certificate can sign other certificates.
+	IsCA bool
+
+	// PathLenConstraint sets the path length constraint for CA certificates.
+	// nil means no constraint; 0 means only leaf certificates;
+	// 1 means one level of intermediate CA, etc.
+	// Only meaningful when IsCA is true.
+	PathLenConstraint *int
+
+	// KeyUsage specifies the permitted key usages as a bitmask.
+	// When non-zero, a KeyUsage extension (critical) is emitted.
+	// When zero, defaults to x509.KeyUsageDigitalSignature.
+	KeyUsage x509.KeyUsage
+
+	// ExtraExtensions are additional X.509v3 extensions appended to
+	// the certificate, typically for CryptoPro OIDs (49.3, 49.4).
+	// These are emitted verbatim (critical flag from each pkix.Extension).
+	ExtraExtensions []pkix.Extension
 }
 
 type SubjectOptions struct {
@@ -88,19 +108,29 @@ type CryptoOptions struct {
 // The returned template is used as both the subject template and, if
 // ParentCertificate is nil, as the issuer template for self-issued certs.
 func (o *CreateCertificateOptions) BuildTemplateCertificate() *x509.Certificate {
-	return &x509.Certificate{
+	tpl := &x509.Certificate{
 		SerialNumber: o.SerialNumber,
-
-		NotBefore: time.Now(),
-		NotAfter:  time.Now().Add(o.TTL),
-
-		KeyUsage: x509.KeyUsageDigitalSignature |
-			x509.KeyUsageKeyEncipherment,
+		NotBefore:    time.Now(),
+		NotAfter:     time.Now().Add(o.TTL),
+		Subject:      o.Subject.toPkixName(),
+		IsCA:         o.IsCA,
+		MaxPathLen:   0,
 
 		ExtKeyUsage: []x509.ExtKeyUsage{
 			x509.ExtKeyUsageServerAuth,
 		},
-
-		Subject: o.Subject.toPkixName(),
 	}
+
+	if o.PathLenConstraint != nil {
+		tpl.MaxPathLen = *o.PathLenConstraint
+		tpl.MaxPathLenZero = *o.PathLenConstraint == 0
+	}
+
+	if o.KeyUsage == 0 {
+		tpl.KeyUsage = x509.KeyUsageDigitalSignature
+	} else {
+		tpl.KeyUsage = o.KeyUsage
+	}
+
+	return tpl
 }
