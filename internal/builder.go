@@ -58,7 +58,7 @@ func BuildTBSCertificate(
 
 	spki, err := BuildSPKI(opts.RawPublicKey, opts.Crypto.CurveOID, opts.Crypto.Algorithm)
 	if err != nil {
-		return nil, fmt.Errorf("CreateCertificate: %w", err)
+		return nil, fmt.Errorf("CreateCertificate: build SPKI: %w", err)
 	}
 
 	serialDER, err := asn1.Marshal(opts.SerialNumber)
