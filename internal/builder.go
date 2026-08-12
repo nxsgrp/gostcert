@@ -146,6 +146,46 @@ func HashForGOST(algo x509gost.GOSTAlgorithm, data []byte) ([]byte, error) {
 	return digestLE, nil
 }
 
+// BuildStandardExtensions builds the standard X.509v3 extensions for a
+// GOST certificate: BasicConstraints, SubjectKeyIdentifier, and
+// AuthorityKeyIdentifier.
+//
+// The AKI is sourced from the parent's SubjectKeyId when available;
+// for self-issued certificates AKI equals SKI.
+func BuildStandardExtensions(opts *options.CreateCertificateOptions, parentCert *x509.Certificate) []pkix.Extension {
+	var exts []pkix.Extension
+
+	// 1. BasicConstraints
+	bc := BuildBasicConstraintsExtension(opts.IsCA, opts.PathLenConstraint)
+	exts = append(exts, bc)
+
+	// 2. SubjectKeyIdentifier (Streebog-256 of raw public key)
+	skiDigest := Streebog256(opts.RawPublicKey)
+	ski := BuildSubjectKeyIdentifierExtension(skiDigest)
+	exts = append(exts, ski)
+
+	// 3. AuthorityKeyIdentifier
+	var akiKeyID []byte
+	if parentCert != nil && len(parentCert.SubjectKeyId) > 0 {
+		akiKeyID = parentCert.SubjectKeyId
+	} else {
+		akiKeyID = skiDigest // self-signed: AKI = SKI
+	}
+	aki := BuildAuthorityKeyIdentifierExtension(akiKeyID)
+	exts = append(exts, aki)
+
+	// 4. KeyUsage (if specified)
+	if opts.KeyUsage != 0 {
+		ku := BuildKeyUsageExtension(opts.KeyUsage)
+		exts = append(exts, ku)
+	}
+
+	// 5. ExtraExtensions appended verbatim
+	exts = append(exts, opts.ExtraExtensions...)
+
+	return exts
+}
+
 // BuildExtensions serializes a slice of pkix.Extension into the DER-encoded
 // [3] EXPLICIT Extensions field of TBSCertificate (RFC 5280, section 4.1.2.9).
 //
