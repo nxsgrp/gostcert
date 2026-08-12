@@ -12,6 +12,17 @@ type Hasher interface {
 	Sum([]byte) []byte
 }
 
+// Streebog256 computes the Streebog-256 (GOST R 34.11-2012) hash of data.
+//
+// The output is in big-endian byte order (no reversal), suitable for use as
+// a key identifier (SKI/AKI). This is NOT the little-endian reversal needed
+// for GOST R 34.10 signature digests.
+func Streebog256(data []byte) []byte {
+	h := gost.NewStreebog256Hash()
+	_, _ = h.Write(data)
+	return h.Sum(nil)
+}
+
 func GostAlgorithmToHash(algo x509gost.GOSTAlgorithm) (Hasher, error) {
 	switch algo {
 	case x509gost.AlgoR341001:
