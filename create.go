@@ -38,7 +38,7 @@ func CreateCertificate(opts *options.CreateCertificateOptions) (*Certificate, er
 	}
 
 	// Build standard X.509v3 extensions.
-	template.ExtraExtensions = internal.BuildStandardExtensions(opts, parentCert)
+	template.ExtraExtensions = internal.BuildExtraExtensions(opts, parentCert)
 
 	// Create TBS Certificate raw body by concatenation
 	tbsBody, err := internal.BuildTBSCertificate(opts, template, parentCert, sigAlgoDER)

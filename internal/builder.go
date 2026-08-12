@@ -146,13 +146,13 @@ func HashForGOST(algo x509gost.GOSTAlgorithm, data []byte) ([]byte, error) {
 	return digestLE, nil
 }
 
-// BuildStandardExtensions builds the standard X.509v3 extensions for a
+// BuildExtraExtensions builds the standard X.509v3 extensions for a
 // GOST certificate: BasicConstraints, SubjectKeyIdentifier, and
 // AuthorityKeyIdentifier.
 //
 // The AKI is sourced from the parent's SubjectKeyId when available;
 // for self-issued certificates AKI equals SKI.
-func BuildStandardExtensions(opts *options.CreateCertificateOptions, parentCert *x509.Certificate) []pkix.Extension {
+func BuildExtraExtensions(opts *options.CreateCertificateOptions, parentCert *x509.Certificate) []pkix.Extension {
 	var exts []pkix.Extension
 
 	// 1. BasicConstraints
