@@ -5,15 +5,11 @@ import (
 	"crypto/x509/pkix"
 	"encoding/asn1"
 	"fmt"
-	"math/big"
 	"time"
 
 	"github.com/nxsgrp/gostcert/internal/options"
 	"github.com/tarantool/go-gostcrypto/x509gost"
 )
-
-// Ensure big is used (for SerialNumber type)
-var _ = big.NewInt(0)
 
 // derEncodedAlgorithmIdentifier is a minimal ASN.1 container for an
 // AlgorithmIdentifier that carries only the OID and no parameters.
