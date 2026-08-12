@@ -59,8 +59,7 @@ func TestCreateCertificate_SelfSigned(t *testing.T) {
 			SignAlgorithm: x509gost.AlgoR341012_256,
 		},
 
-		RawPrivateKey: privRaw,
-		RawPublicKey:  pubRaw,
+		RawPublicKey: pubRaw,
 
 		TTL: 365 * 24 * time.Hour,
 	}

@@ -21,10 +21,6 @@ type CreateCertificateOptions struct {
 	// RawPublicKey is the raw GOST public key in LE(X) || LE(Y) format.
 	RawPublicKey []byte
 
-	// RawPrivateKey is the raw GOST private key bytes (little-endian scalar).
-	// Used when creating an internal Signer from raw key material.
-	RawPrivateKey []byte
-
 	// ParentCertificate is the issuer certificate. When set, the issued
 	// certificate uses the parent's Subject as the Issuer field.
 	// When nil, the certificate is self-issued (Issuer = Subject).
