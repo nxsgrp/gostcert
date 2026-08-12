@@ -94,8 +94,7 @@ func (o *CreateCertificateOptions) BuildTemplateCertificate() *x509.Certificate 
 		NotBefore: time.Now(),
 		NotAfter:  time.Now().Add(o.TTL),
 
-		KeyUsage: x509.KeyUsageDigitalSignature |
-			x509.KeyUsageKeyEncipherment,
+		KeyUsage: x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
 
 		ExtKeyUsage: []x509.ExtKeyUsage{
 			x509.ExtKeyUsageServerAuth,
