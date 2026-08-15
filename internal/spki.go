@@ -4,6 +4,7 @@ import (
 	"encoding/asn1"
 	"fmt"
 
+	"github.com/nxsgrp/gostcert/internal/models"
 	"github.com/tarantool/go-gostcrypto/x509gost"
 )
 
@@ -38,20 +39,21 @@ type gostSPKIParameters struct {
 // publicKey must be the raw GOST public key in LE(X) || LE(Y) format.
 // curveOID is the ASN.1 OID of the elliptic curve parameter set. algo is
 // the GOSTAlgorithm identifying the key type (e.g. AlgoR341012_256).
-func BuildSPKI(publicKey []byte, curveOID asn1.ObjectIdentifier, algo x509gost.GOSTAlgorithm) ([]byte, error) {
-	alg, err := GostAlgorithmToOID(algo)
+func BuildSPKI(subjectPublicKey models.SubjectPublicKey) ([]byte, error) {
+	alg, err := GostAlgorithmToOID(subjectPublicKey.Algorithm)
 	if err != nil {
 		return nil, fmt.Errorf("buildSPKI: get public key algorithm: %w", err)
 	}
 
-	digestOID, err := GostDigestAlgorithmToOID(algo)
+	//digestOID, err := GostDigestFromCurveOID(subjectPublicKey.CurveOID)
+	digestOID, err := GostDigestAlgorithmToOID(subjectPublicKey.Algorithm)
 	if err != nil {
 		return nil, fmt.Errorf("buildSPKI: get digest algorithm: %w", err)
 	}
 
 	// GOST Parameters is a SEQUENCE { curveOID, digestOID } (RFC 4491).
 	paramsDER, err := asn1.Marshal(gostSPKIParameters{
-		CurveOID:  curveOID,
+		CurveOID:  subjectPublicKey.CurveOID,
 		DigestOID: digestOID,
 	})
 	if err != nil {
@@ -60,7 +62,7 @@ func BuildSPKI(publicKey []byte, curveOID asn1.ObjectIdentifier, algo x509gost.G
 
 	// The public key is wrapped in an OCTET STRING inside the BIT STRING,
 	// per GOST SubjectPublicKeyInfo convention (see reference cert).
-	rawPublicKey, err := asn1.Marshal(publicKey)
+	rawPublicKey, err := asn1.Marshal(subjectPublicKey.RawPublicKey)
 	if err != nil {
 		return nil, fmt.Errorf("buildSPKI: marshal public key: %w", err)
 	}
