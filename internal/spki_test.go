@@ -118,25 +118,64 @@ func TestGostSignatureAlgorithmToOID(t *testing.T) {
 	assert.Error(t, err, "unknown algorithm must return an error")
 }
 
-func TestGostDigestAlgorithmToOID(t *testing.T) {
-	cases := []struct {
-		name string
-		algo x509gost.GOSTAlgorithm
-		want asn1.ObjectIdentifier
+func TestGostDigestFromCurveOID(t *testing.T) {
+	tests := []struct {
+		name  string
+		curve asn1.ObjectIdentifier
+		want  asn1.ObjectIdentifier // nil => digestParamSet omitted
 	}{
-		{"r341001", x509gost.AlgoR341001, x509gost.OIDHashGOSTR341194},
-		{"streebog256", x509gost.AlgoR341012_256, x509gost.OIDHashStreebog256},
-		{"streebog512", x509gost.AlgoR341012_512, x509gost.OIDHashStreebog512},
+		// MUST: Streebog-256 present for the GOST R 34.10-2001 sets.
+		{"testParamSet", oidParamCryptoProTest, x509gost.OIDHashStreebog256},
+		{"cryptoproA", x509gost.OIDParamCryptoProA, x509gost.OIDHashStreebog256},
+		{"cryptoproB", x509gost.OIDParamCryptoProB, x509gost.OIDHashStreebog256},
+		{"cryptoproC", x509gost.OIDParamCryptoProC, x509gost.OIDHashStreebog256},
+		{"xchA", oidParamCryptoProXchA, x509gost.OIDHashStreebog256},
+		{"xchB", oidParamCryptoProXchB, x509gost.OIDHashStreebog256},
+
+		// TC26 256-bit sets: omitted (SHOULD for paramSetA, MUST for B/C/D).
+		{"paramSetA", x509gost.OIDParamTC26_256A, nil},
+		{"paramSetB", x509gost.OIDParamTC26_256B, nil},
+		{"paramSetC", x509gost.OIDParamTC26_256C, nil},
+		{"paramSetD", x509gost.OIDParamTC26_256D, nil},
+
+		// TC26 512-bit sets: omitted (SHOULD).
+		{"512A", x509gost.OIDParamTC26_512A, nil},
+		{"512B", x509gost.OIDParamTC26_512B, nil},
+		{"512 test", oidParamTC26_512Test, nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := GostDigestFromCurveOID(tt.curve)
+			require.NoError(t, err)
+
+			if tt.want == nil {
+				assert.Nil(t, got, "digestParamSet should be omitted (nil)")
+			} else {
+				assert.Equal(t, tt.want, got, "digestParamSet OID mismatch")
+			}
+		})
+	}
+}
+
+func TestValidateGostSPKIParameters(t *testing.T) {
+	// paragraph(publicKeyParamSet, digestParamSet, algo)
+	// digestParamSet == nil means the OPTIONAL field is omitted.
+	cases := []struct {
+		name  string
+		curve asn1.ObjectIdentifier
+		want  asn1.ObjectIdentifier
+	}{
+		{"r341001", x509gost.OIDParamTC26_256A, x509gost.OIDHashGOSTR341194},
+		{"streebog256", x509gost.OIDParamTC26_256A, x509gost.OIDHashStreebog256},
+		{"streebog512", x509gost.OIDParamTC26_256A, x509gost.OIDHashStreebog512},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := GostDigestAlgorithmToOID(tc.algo)
+			got, err := GostDigestFromCurveOID(tc.curve)
 			require.NoError(t, err)
 			assert.Equal(t, tc.want, got)
 		})
 	}
-
-	_, err := GostDigestAlgorithmToOID(x509gost.GOSTAlgorithm(999))
-	assert.Error(t, err, "unknown algorithm must return an error")
 }

@@ -45,8 +45,7 @@ func BuildSPKI(subjectPublicKey models.SubjectPublicKey) ([]byte, error) {
 		return nil, fmt.Errorf("buildSPKI: get public key algorithm: %w", err)
 	}
 
-	//digestOID, err := GostDigestFromCurveOID(subjectPublicKey.CurveOID)
-	digestOID, err := GostDigestAlgorithmToOID(subjectPublicKey.Algorithm)
+	digestOID, err := GostDigestFromCurveOID(subjectPublicKey.CurveOID)
 	if err != nil {
 		return nil, fmt.Errorf("buildSPKI: get digest algorithm: %w", err)
 	}
@@ -140,17 +139,35 @@ func GostSignatureAlgorithmToOID(algo x509gost.GOSTAlgorithm) (asn1.ObjectIdenti
 	}
 }
 
-// GostDigestAlgorithmToOID returns the hash algorithm OID associated with
-// a given GOSTAlgorithm (e.g. OIDHashStreebog256 for AlgoR341012_256).
-func GostDigestAlgorithmToOID(algo x509gost.GOSTAlgorithm) (asn1.ObjectIdentifier, error) {
-	switch algo {
-	case x509gost.AlgoR341001:
-		return x509gost.OIDHashGOSTR341194, nil
-	case x509gost.AlgoR341012_256:
+// GostDigestFromCurveOID returns the digestParamSet OID to encode in the GOST
+// SubjectPublicKeyInfo parameters for a given public key parameter set, per
+// R 1323565.1.023-2018 §4.2 (RFC 9215 §4.2).
+//
+// It returns a nil ObjectIdentifier when the digestParamSet field is to be
+// omitted from the parameters (the ASN.1 OPTIONAL field is then absent).
+//
+// For the GOST R 34.10-2001 public key parameter sets (id-GostR3410-2001
+// Test / CryptoPro-A/B/C / XchA / XchB), §4.2 requires digestParamSet to be
+// present and equal to id-tc26-digest-gost3411-12-256 (Streebog-256). For
+// every other parameter set — the TC26 512-bit keys and 256-paramSetA/B/C/D —
+// the field is omitted (SHOULD/MUST per §4.2), so nil is returned.
+//
+// algo is the GOST algorithm identifying the key/signature bit length and is
+// retained for signature stability; it does not affect the result.
+func GostDigestFromCurveOID(oid asn1.ObjectIdentifier) (asn1.ObjectIdentifier, error) {
+	if isCryptoPro2001(oid) {
 		return x509gost.OIDHashStreebog256, nil
-	case x509gost.AlgoR341012_512:
-		return x509gost.OIDHashStreebog512, nil
-	default:
-		return nil, fmt.Errorf("unknown GOST algorithm for digest OID %d", int(algo))
 	}
+	return nil, nil
+}
+
+// isCryptoPro2001 reports whether oid is one of the GOST R 34.10-2001 public
+// key parameter sets listed in §4.2 as requiring a digestParamSet.
+func isCryptoPro2001(oid asn1.ObjectIdentifier) bool {
+	for _, c := range cryptoPro2001ParamSets {
+		if oid.Equal(c) {
+			return true
+		}
+	}
+	return false
 }
