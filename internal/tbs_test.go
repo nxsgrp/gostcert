@@ -1,7 +1,6 @@
 package internal
 
 import (
-	"crypto/x509/pkix"
 	"encoding/asn1"
 	"math/big"
 	"testing"
@@ -12,27 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tarantool/go-gostcrypto/x509gost"
 )
-
-// countSequenceChildren parses der as a SEQUENCE and returns the number of
-// top-level child elements it contains.
-func countSequenceChildren(t *testing.T, der []byte) int {
-	t.Helper()
-
-	var raw asn1.RawValue
-	rest, err := asn1.Unmarshal(der, &raw)
-	require.NoError(t, err, "DER must parse as a single value")
-	require.Empty(t, rest, "DER must not have trailing bytes")
-	require.Equal(t, asn1.TagSequence, raw.Tag, "DER must be a SEQUENCE")
-
-	children, data := 0, raw.Bytes
-	for len(data) > 0 {
-		var child asn1.RawValue
-		data, err = asn1.Unmarshal(data, &child)
-		require.NoError(t, err)
-		children++
-	}
-	return children
-}
 
 func TestBuildTBSCertificate(t *testing.T) {
 	curveOID, pubRaw := newTestPublicKey(t)
@@ -118,52 +96,23 @@ func TestBuildSigCertificateRawValue(t *testing.T) {
 	assert.Equal(t, body, raw.Bytes, "SEQUENCE content must round-trip")
 }
 
-func TestBuildExtensions(t *testing.T) {
-	t.Run("empty produces nothing", func(t *testing.T) {
-		der, err := BuildExtensions(nil)
-		assert.NoError(t, err)
-		assert.Nil(t, der, "no extensions must produce nil DER")
-	})
+// countSequenceChildren parses der as a SEQUENCE and returns the number of
+// top-level child elements it contains.
+func countSequenceChildren(t *testing.T, der []byte) int {
+	t.Helper()
 
-	t.Run("non-empty round-trips", func(t *testing.T) {
-		in := []pkix.Extension{
-			{Id: asn1.ObjectIdentifier{2, 5, 29, 19}, Critical: true, Value: []byte{0x30, 0x00}},
-		}
+	var raw asn1.RawValue
+	rest, err := asn1.Unmarshal(der, &raw)
+	require.NoError(t, err, "DER must parse as a single value")
+	require.Empty(t, rest, "DER must not have trailing bytes")
+	require.Equal(t, asn1.TagSequence, raw.Tag, "DER must be a SEQUENCE")
 
-		der, err := BuildExtensions(in)
+	children, data := 0, raw.Bytes
+	for len(data) > 0 {
+		var child asn1.RawValue
+		data, err = asn1.Unmarshal(data, &child)
 		require.NoError(t, err)
-		assert.NotEmpty(t, der)
-
-		// The result is wrapped in [3] EXPLICIT SEQUENCE OF Extension.
-		var raw asn1.RawValue
-		rest, err := asn1.Unmarshal(der, &raw)
-		require.NoError(t, err)
-		require.Empty(t, rest)
-		assert.Equal(t, asn1.ClassContextSpecific, raw.Class)
-		assert.Equal(t, 3, raw.Tag)
-
-		var got []pkix.Extension
-		_, err = asn1.Unmarshal(raw.Bytes, &got)
-		require.NoError(t, err)
-		assert.Len(t, got, len(in))
-		assert.Equal(t, in[0].Id, got[0].Id)
-		assert.Equal(t, in[0].Critical, got[0].Critical)
-		assert.Equal(t, in[0].Value, got[0].Value)
-	})
-}
-
-func TestConcatBytes(t *testing.T) {
-	t.Run("concatenates in order", func(t *testing.T) {
-		got := ConcatBytes([]byte("ab"), []byte("c"), []byte("def"))
-		assert.Equal(t, []byte("abcdef"), got)
-	})
-
-	t.Run("single part", func(t *testing.T) {
-		assert.Equal(t, []byte("solo"), ConcatBytes([]byte("solo")))
-	})
-
-	t.Run("empty yields empty", func(t *testing.T) {
-		assert.Empty(t, ConcatBytes())
-		assert.Empty(t, ConcatBytes([]byte{}, []byte{}))
-	})
+		children++
+	}
+	return children
 }

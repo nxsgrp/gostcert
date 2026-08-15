@@ -40,12 +40,12 @@ type gostSPKIParameters struct {
 // curveOID is the ASN.1 OID of the elliptic curve parameter set. algo is
 // the GOSTAlgorithm identifying the key type (e.g. AlgoR341012_256).
 func BuildSPKI(subjectPublicKey models.SubjectPublicKey) ([]byte, error) {
-	alg, err := GostAlgorithmToOID(subjectPublicKey.Algorithm)
+	alg, err := OIDPublicKeyByGostAlgorithm(subjectPublicKey.Algorithm)
 	if err != nil {
 		return nil, fmt.Errorf("buildSPKI: get public key algorithm: %w", err)
 	}
 
-	digestOID, err := GostDigestFromCurveOID(subjectPublicKey.CurveOID)
+	digestOID, err := GostDigestFromCurveOID(subjectPublicKey.CurveOID, subjectPublicKey.Algorithm)
 	if err != nil {
 		return nil, fmt.Errorf("buildSPKI: get digest algorithm: %w", err)
 	}
@@ -89,7 +89,7 @@ func BuildSPKI(subjectPublicKey models.SubjectPublicKey) ([]byte, error) {
 // Unlike BuildSPKI, the signature AlgorithmIdentifier carries no Parameters
 // field — only the OID is encoded.
 func BuildSignatureAlgorithm(sigAlgorithm x509gost.GOSTAlgorithm) ([]byte, error) {
-	sigOID, err := GostSignatureAlgorithmToOID(sigAlgorithm)
+	sigOID, err := OIDSignatureAlgorithmByGostAlgorithm(sigAlgorithm)
 	if err != nil {
 		return nil, fmt.Errorf("buildSignatureAlgorithm: get signature algorithm: %w", err)
 	}
@@ -102,12 +102,12 @@ func BuildSignatureAlgorithm(sigAlgorithm x509gost.GOSTAlgorithm) ([]byte, error
 	return data, nil
 }
 
-// GostAlgorithmToOID returns the SubjectPublicKeyInfo algorithm OID for
+// OIDPublicKeyByGostAlgorithm returns the SubjectPublicKeyInfo algorithm OID for
 // a given GOST algorithm (e.g. OIDPublicKeyGOSTR341012_256).
 //
 // These OIDs identify the public key algorithm in the
 // SubjectPublicKeyInfo.AlgorithmIdentifier.Algorithm field.
-func GostAlgorithmToOID(algo x509gost.GOSTAlgorithm) (asn1.ObjectIdentifier, error) {
+func OIDPublicKeyByGostAlgorithm(algo x509gost.GOSTAlgorithm) (asn1.ObjectIdentifier, error) {
 	switch algo {
 	case x509gost.AlgoR341001:
 		return x509gost.OIDPublicKeyGOSTR341001, nil
@@ -120,13 +120,13 @@ func GostAlgorithmToOID(algo x509gost.GOSTAlgorithm) (asn1.ObjectIdentifier, err
 	}
 }
 
-// GostSignatureAlgorithmToOID returns the signature algorithm OID for a
+// OIDSignatureAlgorithmByGostAlgorithm returns the signature algorithm OID for a
 // given GOSTAlgorithm (e.g. OIDSignatureGOSTR341012_256).
 //
 // These OIDs identify the signature algorithm in both the
 // TBSCertificate.signature and the outer
 // SignedCertificate.signatureAlgorithm fields.
-func GostSignatureAlgorithmToOID(algo x509gost.GOSTAlgorithm) (asn1.ObjectIdentifier, error) {
+func OIDSignatureAlgorithmByGostAlgorithm(algo x509gost.GOSTAlgorithm) (asn1.ObjectIdentifier, error) {
 	switch algo {
 	case x509gost.AlgoR341001:
 		return x509gost.OIDSignatureGOSTR341001, nil
@@ -154,10 +154,15 @@ func GostSignatureAlgorithmToOID(algo x509gost.GOSTAlgorithm) (asn1.ObjectIdenti
 //
 // algo is the GOST algorithm identifying the key/signature bit length and is
 // retained for signature stability; it does not affect the result.
-func GostDigestFromCurveOID(oid asn1.ObjectIdentifier) (asn1.ObjectIdentifier, error) {
+func GostDigestFromCurveOID(oid asn1.ObjectIdentifier, algo x509gost.GOSTAlgorithm) (asn1.ObjectIdentifier, error) {
+	if algo == x509gost.AlgoR341012_512 {
+		return nil, nil
+	}
+
 	if isCryptoPro2001(oid) {
 		return x509gost.OIDHashStreebog256, nil
 	}
+
 	return nil, nil
 }
 

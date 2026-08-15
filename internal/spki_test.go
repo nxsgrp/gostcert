@@ -85,13 +85,13 @@ func TestGostAlgorithmToOID(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := GostAlgorithmToOID(tc.algo)
+			got, err := OIDPublicKeyByGostAlgorithm(tc.algo)
 			require.NoError(t, err)
 			assert.Equal(t, tc.want, got)
 		})
 	}
 
-	_, err := GostAlgorithmToOID(x509gost.GOSTAlgorithm(999))
+	_, err := OIDPublicKeyByGostAlgorithm(x509gost.GOSTAlgorithm(999))
 	assert.Error(t, err, "unknown algorithm must return an error")
 }
 
@@ -108,13 +108,13 @@ func TestGostSignatureAlgorithmToOID(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := GostSignatureAlgorithmToOID(tc.algo)
+			got, err := OIDSignatureAlgorithmByGostAlgorithm(tc.algo)
 			require.NoError(t, err)
 			assert.Equal(t, tc.want, got)
 		})
 	}
 
-	_, err := GostSignatureAlgorithmToOID(x509gost.GOSTAlgorithm(999))
+	_, err := OIDSignatureAlgorithmByGostAlgorithm(x509gost.GOSTAlgorithm(999))
 	assert.Error(t, err, "unknown algorithm must return an error")
 }
 
@@ -146,7 +146,7 @@ func TestGostDigestFromCurveOID(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := GostDigestFromCurveOID(tt.curve)
+			got, err := GostDigestFromCurveOID(tt.curve, x509gost.AlgoR341012_256)
 			require.NoError(t, err)
 
 			if tt.want == nil {
@@ -163,17 +163,18 @@ func TestValidateGostSPKIParameters(t *testing.T) {
 	// digestParamSet == nil means the OPTIONAL field is omitted.
 	cases := []struct {
 		name  string
+		algo  x509gost.GOSTAlgorithm
 		curve asn1.ObjectIdentifier
 		want  asn1.ObjectIdentifier
 	}{
-		{"r341001", x509gost.OIDParamTC26_256A, x509gost.OIDHashGOSTR341194},
-		{"streebog256", x509gost.OIDParamTC26_256A, x509gost.OIDHashStreebog256},
-		{"streebog512", x509gost.OIDParamTC26_256A, x509gost.OIDHashStreebog512},
+		{"r341001", x509gost.AlgoR341012_256, x509gost.OIDParamTC26_256A, x509gost.OIDHashGOSTR341194},
+		{"streebog256", x509gost.AlgoR341012_256, x509gost.OIDParamTC26_256A, x509gost.OIDHashStreebog256},
+		{"streebog512", x509gost.AlgoR341012_256, x509gost.OIDParamTC26_256A, x509gost.OIDHashStreebog512},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := GostDigestFromCurveOID(tc.curve)
+			got, err := GostDigestFromCurveOID(tc.curve, tc.algo)
 			require.NoError(t, err)
 			assert.Equal(t, tc.want, got)
 		})
