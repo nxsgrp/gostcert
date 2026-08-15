@@ -118,6 +118,29 @@ func TestGostSignatureAlgorithmToOID(t *testing.T) {
 	assert.Error(t, err, "unknown algorithm must return an error")
 }
 
+func TestGostDigestAlgorithmToOID(t *testing.T) {
+	cases := []struct {
+		name string
+		algo x509gost.GOSTAlgorithm
+		want asn1.ObjectIdentifier
+	}{
+		{"r341001", x509gost.AlgoR341001, x509gost.OIDHashGOSTR341194},
+		{"streebog256", x509gost.AlgoR341012_256, x509gost.OIDHashStreebog256},
+		{"streebog512", x509gost.AlgoR341012_512, x509gost.OIDHashStreebog512},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := GostDigestAlgorithmToOID(tc.algo)
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, got)
+		})
+	}
+
+	_, err := GostDigestAlgorithmToOID(x509gost.GOSTAlgorithm(999))
+	assert.Error(t, err, "unknown algorithm must return an error")
+}
+
 func TestGostDigestFromCurveOID(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -154,29 +177,6 @@ func TestGostDigestFromCurveOID(t *testing.T) {
 			} else {
 				assert.Equal(t, tt.want, got, "digestParamSet OID mismatch")
 			}
-		})
-	}
-}
-
-func TestValidateGostSPKIParameters(t *testing.T) {
-	// paragraph(publicKeyParamSet, digestParamSet, algo)
-	// digestParamSet == nil means the OPTIONAL field is omitted.
-	cases := []struct {
-		name  string
-		algo  x509gost.GOSTAlgorithm
-		curve asn1.ObjectIdentifier
-		want  asn1.ObjectIdentifier
-	}{
-		{"r341001", x509gost.AlgoR341012_256, x509gost.OIDParamTC26_256A, x509gost.OIDHashGOSTR341194},
-		{"streebog256", x509gost.AlgoR341012_256, x509gost.OIDParamTC26_256A, x509gost.OIDHashStreebog256},
-		{"streebog512", x509gost.AlgoR341012_256, x509gost.OIDParamTC26_256A, x509gost.OIDHashStreebog512},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			got, err := GostDigestFromCurveOID(tc.curve, tc.algo)
-			require.NoError(t, err)
-			assert.Equal(t, tc.want, got)
 		})
 	}
 }

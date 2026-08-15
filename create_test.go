@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	newTestCertPath = "test/resources/certs/created-certificate-6.der"
+	newTestCertPath = "test/resources/certs/created-certificate-7.der"
 )
 
 func TestCreateCertificate_SelfSigned(t *testing.T) {

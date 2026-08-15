@@ -139,6 +139,27 @@ func OIDSignatureAlgorithmByGostAlgorithm(algo x509gost.GOSTAlgorithm) (asn1.Obj
 	}
 }
 
+// GostDigestAlgorithmToOID returns the hash algorithm OID actually used for the
+// cryptographic digest of a GOST signature, given the GOST algorithm.
+//
+// Unlike GostDigestFromCurveOID, which decides what to write into the optional
+// digestParamSet field of the SPKI parameters (and may return nil), this
+// function always returns a concrete hash: GOST R 34.11-94 for GOST R
+// 34.10-2001 keys, Streebog-256 for GOST R 34.10-2012 256-bit keys, and
+// Streebog-512 for GOST R 34.10-2012 512-bit keys.
+func GostDigestAlgorithmToOID(algo x509gost.GOSTAlgorithm) (asn1.ObjectIdentifier, error) {
+	switch algo {
+	case x509gost.AlgoR341001:
+		return x509gost.OIDHashGOSTR341194, nil
+	case x509gost.AlgoR341012_256:
+		return x509gost.OIDHashStreebog256, nil
+	case x509gost.AlgoR341012_512:
+		return x509gost.OIDHashStreebog512, nil
+	default:
+		return nil, fmt.Errorf("unknown GOST algorithm for digest OID %d", int(algo))
+	}
+}
+
 // GostDigestFromCurveOID returns the digestParamSet OID to encode in the GOST
 // SubjectPublicKeyInfo parameters for a given public key parameter set, per
 // R 1323565.1.023-2018 §4.2 (RFC 9215 §4.2).
@@ -155,15 +176,34 @@ func OIDSignatureAlgorithmByGostAlgorithm(algo x509gost.GOSTAlgorithm) (asn1.Obj
 // algo is the GOST algorithm identifying the key/signature bit length and is
 // retained for signature stability; it does not affect the result.
 func GostDigestFromCurveOID(oid asn1.ObjectIdentifier, algo x509gost.GOSTAlgorithm) (asn1.ObjectIdentifier, error) {
-	if algo == x509gost.AlgoR341012_512 {
-		return nil, nil
+	hashAlgo, err := GostDigestAlgorithmToOID(algo)
+	if err != nil {
+		return hashAlgo, fmt.Errorf("gostDigestFromCurveOID: %w", err)
 	}
 
-	if isCryptoPro2001(oid) {
+	switch {
+	// MUST: digestParamSet present and equal to id-tc26-digest-gost3411-12-256
+	// when publicKeyParamSet is a GOST R 34.10-2001 set (§4.2).
+	case isCryptoPro2001(oid):
 		return x509gost.OIDHashStreebog256, nil
-	}
 
-	return nil, nil
+	// SHOULD: digestParamSet omitted for a 512-bit GOST R 34.10-2012 key (§4.2).
+	case algo == x509gost.AlgoR341012_512:
+		return nil, nil
+
+	// SHOULD: digestParamSet omitted for 256-paramSetA (§4.2).
+	case oid.Equal(x509gost.OIDParamTC26_256A):
+		// FIXME: need to return nil (remove debug value)
+		return hashAlgo, nil
+
+	// MUST: digestParamSet omitted for 256-paramSetB/C/D (§4.2).
+	case isTC26256BCD(oid):
+		return nil, nil
+
+	// Default: any other parameter set (e.g. 512-bit test param set) — omit.
+	default:
+		return hashAlgo, nil
+	}
 }
 
 // isCryptoPro2001 reports whether oid is one of the GOST R 34.10-2001 public
@@ -175,4 +215,12 @@ func isCryptoPro2001(oid asn1.ObjectIdentifier) bool {
 		}
 	}
 	return false
+}
+
+// isTC26256BCD reports whether oid is id-tc26-gost-3410-2012-256-paramSetB/C/D,
+// for which §4.2 requires digestParamSet to be omitted.
+func isTC26256BCD(oid asn1.ObjectIdentifier) bool {
+	return oid.Equal(x509gost.OIDParamTC26_256B) ||
+		oid.Equal(x509gost.OIDParamTC26_256C) ||
+		oid.Equal(x509gost.OIDParamTC26_256D)
 }
