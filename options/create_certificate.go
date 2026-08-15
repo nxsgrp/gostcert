@@ -1,9 +1,11 @@
 package options
 
 import (
-	"crypto/x509"
+	"fmt"
 	"math/big"
 	"time"
+
+	"github.com/nxsgrp/gostcert/internal/models"
 )
 
 // CreateCertificateOptions holds all parameters needed to issue a new
@@ -12,43 +14,30 @@ type CreateCertificateOptions struct {
 	// SerialNumber is the unique serial number assigned to the certificate.
 	SerialNumber *big.Int
 
-	// SubjectOptions is pkix.Name of subject certificate fields.
-	Subject SubjectOptions
-
-	// Crypto is the suit of certificated crypto options.
-	Crypto CryptoOptions
-
-	// RawPublicKey is the raw GOST public key in LE(X) || LE(Y) format.
-	RawPublicKey []byte
-
-	// ParentCertificate is the issuer certificate. When set, the issued
-	// certificate uses the parent's Subject as the Issuer field.
-	// When nil, the certificate is self-issued (Issuer = Subject).
-	ParentCertificate *x509.Certificate
+	// NotBefore ...
+	NotBefore time.Time
 
 	// TTL is the certificate validity duration in seconds from the
 	// current time (NotAfter = Now + TTL).
 	TTL time.Duration
+
+	// SubjectOptions is the necessary subject options to create certificate.
+	Subject SubjectOptions
+
+	// IssuerOptions is the necessary issuer options to sign certificate.
+	Issuer IssuerOptions
 }
 
-// BuildTemplateCertificate creates a *x509.Certificate template populated
-// from the CreateCertificateOptions fields.
-//
-// The returned template is used as both the subject template and, if
-// ParentCertificate is nil, as the issuer template for self-issued certs.
-func (o *CreateCertificateOptions) BuildTemplateCertificate() *x509.Certificate {
-	return &x509.Certificate{
-		SerialNumber: o.SerialNumber,
+func (cco *CreateCertificateOptions) BuildCertificateInformation() (*models.CertificateInformation, error) {
+	certInfo, err := models.NewCertificateInformationBuilder().
+		WithSerialNumber(cco.SerialNumber).
+		WithNotBefore(cco.NotBefore).
+		WithTTL(cco.TTL).
+		Build()
 
-		NotBefore: time.Now(),
-		NotAfter:  time.Now().Add(o.TTL),
-
-		KeyUsage: x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
-
-		ExtKeyUsage: []x509.ExtKeyUsage{
-			x509.ExtKeyUsageServerAuth,
-		},
-
-		Subject: o.Subject.toPkixName(),
+	if err != nil {
+		return nil, fmt.Errorf("failed to build certificate information: %w", err)
 	}
+
+	return certInfo, nil
 }
