@@ -38,7 +38,11 @@ func (b *CertificateInformationBuilder) Build() (*CertificateInformation, error)
 		return nil, fmt.Errorf("serial number is required")
 	}
 
-	if b.certInfo.NotBefore.IsZero() || b.certInfo.NotAfter.IsZero() {
+	// Only default NotBefore to "now" when the caller did not supply one;
+	// NotAfter is always derived from NotBefore + TTL. Checking NotAfter here
+	// (instead of NotBefore alone) would clobber an explicitly passed
+	// NotBefore whenever the caller set only NotBefore and the TTL.
+	if b.certInfo.NotBefore.IsZero() {
 		b.certInfo.NotBefore = time.Now()
 	}
 

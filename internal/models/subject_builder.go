@@ -120,17 +120,15 @@ func (sb *SubjectBuilder) validatePublicKeyLength() error {
 		return err
 	}
 
-	publicKeyLen := len(sb.subject.PublicKey.RawPublicKey)
+	// A 256-bit curve expects a 64-byte public key (LE(x)||LE(y)), a 512-bit
+	// curve a 128-byte key. Any other length is rejected.
+	wantLen := 64
+	if algoDigit == 512 {
+		wantLen = 128
+	}
 
-	switch publicKeyLen {
-	case 64:
-		if algoDigit != 256 {
-			return InvalidPublicKeyLength
-		}
-	case 128:
-		if algoDigit != 512 {
-			return InvalidPublicKeyLength
-		}
+	if len(sb.subject.PublicKey.RawPublicKey) != wantLen {
+		return InvalidPublicKeyLength
 	}
 
 	return nil
