@@ -8,11 +8,14 @@ import (
 	"github.com/nxsgrp/gostcert/internal/models"
 )
 
-// derEncodedAlgorithmIdentifier is a minimal ASN.1 container for an
-// AlgorithmIdentifier that carries only the OID and no parameters.
-// Used for signature AlgorithmIdentifiers per GOST conventions.
+// derEncodedAlgorithmIdentifier is an ASN.1 container for the signature
+// AlgorithmIdentifier. It carries the algorithm OID plus a NULL Parameters
+// field, matching the encoding produced by OpenSSL for GOST signature
+// algorithms (RFC 5280 §4.1.1.2 requires the parameters to be present and be
+// NULL for most algorithms).
 type derEncodedAlgorithmIdentifier struct {
 	AlgorithmIdentifier asn1.ObjectIdentifier
+	Parameters          asn1.RawValue `asn1:"optional"`
 }
 
 // validatedDER is an ASN.1 container for the Validity SEQUENCE
@@ -41,7 +44,7 @@ func BuildTBSCertificate(
 	issuer *models.Issuer,
 	sigAlgoDER []byte,
 ) ([]byte, error) {
-	subjectDER, err := asn1.Marshal(subject.GetPkixName().ToRDNSequence())
+	subjectDER, err := BuildSubjectDER(subject)
 	if err != nil {
 		return nil, fmt.Errorf("CreateCertificate: marshal Subject: %w", err)
 	}
@@ -150,4 +153,34 @@ func BuildSigCertificateRawValue(sigCertBody []byte) ([]byte, error) {
 	}
 
 	return certDER, nil
+}
+
+// BuildSubjectDER marshals the subject Name into an asn1.RDNSequence, encoding
+// every string attribute as UTF8String except countryName (left as
+// PrintableString). This matches the DER encoding OpenSSL produces for GOST
+// certificates, enabling byte-for-byte comparison with an OpenSSL-built
+// certificate.
+func BuildSubjectDER(subject *models.Subject) ([]byte, error) {
+	rdns := subject.GetPkixName().ToRDNSequence()
+
+	for i := range rdns {
+		for j := range rdns[i] {
+			atv := &rdns[i][j]
+
+			if atv.Type.Equal(oidCountryName) {
+				// Country stays PrintableString (as OpenSSL encodes it).
+				continue
+			}
+
+			if str, ok := atv.Value.(string); ok {
+				atv.Value = asn1.RawValue{
+					Class: asn1.ClassUniversal,
+					Tag:   asn1.TagUTF8String,
+					Bytes: []byte(str),
+				}
+			}
+		}
+	}
+
+	return asn1.Marshal(rdns)
 }

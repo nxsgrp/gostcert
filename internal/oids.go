@@ -27,6 +27,10 @@ var (
 	oidParamTC26_512Test = asn1.ObjectIdentifier{1, 2, 643, 7, 1, 2, 1, 2, 0}
 )
 
+// oidCountryName is id-at-countryName (2.5.4.6), the one RDN attribute that
+// OpenSSL leaves as PrintableString instead of UTF8String.
+var oidCountryName = asn1.ObjectIdentifier{2, 5, 4, 6}
+
 // cryptoPro2001ParamSets lists the GOST R 34.10-2001 public key parameter sets
 // for which §4.2 requires digestParamSet to be present and equal to
 // id-tc26-digest-gost3411-12-256 (MUST).
