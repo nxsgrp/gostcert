@@ -86,15 +86,18 @@ func BuildSPKI(subjectPublicKey models.SubjectPublicKey) ([]byte, error) {
 // BuildSignatureAlgorithm builds a DER-encoded AlgorithmIdentifier for the
 // GOST signature algorithm.
 //
-// Unlike BuildSPKI, the signature AlgorithmIdentifier carries no Parameters
-// field — only the OID is encoded.
+// The signature AlgorithmIdentifier carries the algorithm OID and a NULL
+// Parameters field (RFC 5280 §4.1.1.2), matching OpenSSL's GOST encoding.
 func BuildSignatureAlgorithm(sigAlgorithm x509gost.GOSTAlgorithm) ([]byte, error) {
 	sigOID, err := OIDSignatureAlgorithmByGostAlgorithm(sigAlgorithm)
 	if err != nil {
 		return nil, fmt.Errorf("buildSignatureAlgorithm: get signature algorithm: %w", err)
 	}
 
-	data, err := asn1.Marshal(derEncodedAlgorithmIdentifier{AlgorithmIdentifier: sigOID})
+	data, err := asn1.Marshal(derEncodedAlgorithmIdentifier{
+		AlgorithmIdentifier: sigOID,
+		Parameters:          asn1.NullRawValue,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("buildSignatureAlgorithm: marshal identifier: %w", err)
 	}
@@ -193,16 +196,15 @@ func GostDigestFromCurveOID(oid asn1.ObjectIdentifier, algo x509gost.GOSTAlgorit
 
 	// SHOULD: digestParamSet omitted for 256-paramSetA (§4.2).
 	case oid.Equal(x509gost.OIDParamTC26_256A):
-		// FIXME: need to return nil (remove debug value)
-		return hashAlgo, nil
+		return nil, nil
 
 	// MUST: digestParamSet omitted for 256-paramSetB/C/D (§4.2).
 	case isTC26256BCD(oid):
 		return nil, nil
 
-	// Default: any other parameter set (e.g. 512-bit test param set) — omit.
+	// Default: any other TC26 parameter set (e.g. 512-bit sets) — omit (§4.2).
 	default:
-		return hashAlgo, nil
+		return nil, nil
 	}
 }
 
