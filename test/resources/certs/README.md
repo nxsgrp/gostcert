@@ -4,12 +4,12 @@ This directory contains test resources for parsing GOST certificates using the `
 
 ## Files
 
-| File              | Format | Purpose                                                             |
-|-------------------|--------|---------------------------------------------------------------------|
-| `certificate.der` | DER    | Test certificate in binary DER format (used in tests)               |
-| `cert.pem`        | PEM    | Same certificate as `certificate.der`, but in PEM encoding (Base64) |
-| `private_key.pem` | PEM    | Private key for the certificate                                     |
-| `gost.conf`       | config | OpenSSL configuration to enable GOST algorithm support              |
+| File                | Format | Purpose                                                             |
+|---------------------|--------|---------------------------------------------------------------------|
+| `certificate.der`   | DER    | Test certificate in binary DER format (used in tests)               |
+| `cert.pem`          | PEM    | Same certificate as `certificate.der`, but in PEM encoding (Base64) |
+| `private_key.pem`   | PEM    | Private key for the certificate                                     |
+| `openssl-gost.conf` | config | OpenSSL configuration to enable GOST algorithm support              |
 
 ## Building Your Own Certificate with GOST Algorithms
 
@@ -17,7 +17,7 @@ To work with GOST keys and certificates, you need OpenSSL built with GOST engine
 
 ### 1. OpenSSL Configuration
 
-The `gost.conf` file enables the built-in `gost` engine and sets cryptographic transformation parameters.
+The `openssl-gost.conf` file enables the built-in `gost` engine and sets cryptographic transformation parameters.
 
 - `engine_id = gost` — name of the built-in OpenSSL algorithm engine
 - `default_algorithms = ALL` — the engine intercepts all supported algorithms
@@ -58,7 +58,7 @@ openssl req -engine gost \
   -days 3650 \
   -out mycert.pem \
   -subj "/C=RU/O=MyOrg/CN=My GOST Certificate" \
-  -config gost.conf \
+  -config openssl-gost.conf \
   -sigopt paramset:A
 ```
 
