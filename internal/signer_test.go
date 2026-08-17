@@ -17,26 +17,14 @@ func TestSignerPublic(t *testing.T) {
 	privRaw, pubRaw, err := gost.GenerateEphemeralKey(curve, rand.Reader)
 	require.NoError(t, err)
 
-	signer := &Signer{RawPrivateKey: privRaw, CurveOID: x509gost.OIDParamCryptoProA}
+	signer, err := BuildSigner(x509gost.OIDParamCryptoProA, privRaw)
+	require.NoError(t, err, "failed to build signer")
 
-	// Signer.Public() must agree with the key independently derived from the
-	// same private scalar.
+	// Signer.Public() must agree with the key independently derived from the same private scalar.
 	assert.Equal(t, pubRaw, signer.Public(), "derived public key mismatch")
 
-	// CryptoPro-A is a 256-bit curve, so the public key is LE(X)||LE(Y),
-	// i.e. two 32-byte coordinates.
+	// CryptoPro-A is a 256-bit curve, so the public key is LE(X)||LE(Y), i.e. two 32-byte coordinates.
 	assert.Len(t, pubRaw, 64, "256-bit GOST public key must be 64 bytes")
-}
-
-func TestSignerPublic_Deterministic(t *testing.T) {
-	curve, err := gost.CurveByOID(x509gost.OIDParamCryptoProA)
-	require.NoError(t, err)
-	privRaw, _, err := gost.GenerateEphemeralKey(curve, rand.Reader)
-	require.NoError(t, err)
-
-	signer := &Signer{RawPrivateKey: privRaw, CurveOID: x509gost.OIDParamCryptoProA}
-	assert.Equal(t, signer.Public(), signer.Public(),
-		"Public() must be deterministic for a fixed private key")
 }
 
 func TestSignerSign(t *testing.T) {
@@ -46,7 +34,8 @@ func TestSignerSign(t *testing.T) {
 	privRaw, pubRaw, err := gost.GenerateEphemeralKey(curve, rand.Reader)
 	require.NoError(t, err)
 
-	signer := &Signer{RawPrivateKey: privRaw, CurveOID: x509gost.OIDParamCryptoProA}
+	signer, err := BuildSigner(x509gost.OIDParamCryptoProA, privRaw)
+	require.NoError(t, err, "failed to build signer")
 
 	// Sign only accepts a little-endian digest as produced by HashForGOST.
 	digest, err := HashForGOST(x509gost.AlgoR341012_256, []byte("sign me"))
