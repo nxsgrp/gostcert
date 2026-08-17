@@ -28,3 +28,7 @@ type Certificate struct {
 func (c *Certificate) StdCertificate() *x509.Certificate {
 	return c.cert.Stdlib
 }
+
+func (c *Certificate) GetRawCertificate() []byte {
+	return c.cert.Raw
+}

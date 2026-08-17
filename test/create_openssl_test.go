@@ -1,4 +1,4 @@
-package gostcert
+package test
 
 import (
 	"crypto/rand"
@@ -10,11 +10,13 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/nxsgrp/gostcert"
+	"github.com/nxsgrp/gostcert/gost"
 	"github.com/nxsgrp/gostcert/internal"
 	"github.com/nxsgrp/gostcert/options"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	gost "github.com/tarantool/go-gostcrypto"
+	"github.com/tarantool/go-gostcrypto"
 	"github.com/tarantool/go-gostcrypto/x509gost"
 )
 
@@ -31,16 +33,16 @@ var ossReferenceCases = []ossReferenceCase{
 		name:    "tc26_256a",
 		derPath: tc26_256DerFilePath,
 		scalar:  tc26_256Scalar,
-		curve:   x509gost.OIDParamTC26_256A,
-		algo:    x509gost.AlgoR341012_256,
+		curve:   gost.OIDParamTC26_256A,
+		algo:    gost.AlgoR341012_256,
 		sigLen:  64,
 	},
 	{
 		name:    "tc26_512a",
 		derPath: tc26_512DerFilePath,
 		scalar:  tc26_512Scalar,
-		curve:   x509gost.OIDParamTC26_512A,
-		algo:    x509gost.AlgoR341012_512,
+		curve:   gost.OIDParamTC26_512A,
+		algo:    gost.AlgoR341012_512,
 		sigLen:  128,
 	},
 }
@@ -70,7 +72,7 @@ type ossReferenceCase struct {
 	// the bytes are reversed before signing.
 	scalar string
 	curve  asn1.ObjectIdentifier
-	algo   x509gost.GOSTAlgorithm
+	algo   gost.GOSTAlgorithm
 	sigLen int
 }
 
@@ -89,7 +91,7 @@ func TestCreateCertificate_ReproducesOpenSSL(t *testing.T) {
 			der, err := os.ReadFile(tc.derPath)
 			require.NoError(t, err, "read reference certificate")
 
-			ref, err := ParseCertificate(der)
+			ref, err := gostcert.ParseCertificate(der)
 			require.NoError(t, err, "parse reference certificate")
 			std := ref.StdCertificate()
 
@@ -124,11 +126,11 @@ func TestCreateCertificate_ReproducesOpenSSL(t *testing.T) {
 				},
 			}
 
-			ours, err := CreateCertificate(opts)
+			ours, err := gostcert.CreateCertificate(opts)
 			require.NoError(t, err, "create certificate")
 
 			refParts := splitCertificate(t, der)
-			ourParts := splitCertificate(t, ours.cert.Raw)
+			ourParts := splitCertificate(t, ours.GetRawCertificate())
 
 			// 1) Every deterministic TBS field (except extensions and the SPKI,
 			// which are compared structurally below) must be byte-identical to
@@ -178,14 +180,14 @@ func TestCreateCertificate_ReproducesOpenSSL(t *testing.T) {
 			// valid over their own TBS with the same public key, and carry the
 			// expected length.
 			assert.Len(t, ourParts.Sig, tc.sigLen, "signature length must match the algorithm")
-			curve, err := gost.CurveByOID(tc.curve)
+			curve, err := gostcrypto.CurveByOID(tc.curve)
 			require.NoError(t, err)
 			pubRaw := signer.Public().([]byte)
 
 			for label, parts := range map[string]certParts{"reference": refParts, "ours": ourParts} {
-				digest, err := internal.HashForGOST(tc.algo, parts.TBS)
+				digest, err := internal.HashForGOST(x509gost.GOSTAlgorithm(tc.algo), parts.TBS)
 				require.NoError(t, err, "%s: hash TBS", label)
-				ok, err := gost.VerifyDigestOnCurve(curve, pubRaw, digest, parts.Sig)
+				ok, err := gostcrypto.VerifyDigestOnCurve(curve, pubRaw, digest, parts.Sig)
 				require.NoError(t, err, "%s: verify signature", label)
 				assert.True(t, ok, "%s: signature must verify against the shared public key", label)
 			}
@@ -299,7 +301,7 @@ func TestOpenSSL_ParsesOurCertificate(t *testing.T) {
 	der, err := os.ReadFile(tc.derPath)
 	require.NoError(t, err, "read reference certificate")
 
-	ref, err := ParseCertificate(der)
+	ref, err := gostcert.ParseCertificate(der)
 	require.NoError(t, err, "parse reference certificate")
 	std := ref.StdCertificate()
 
@@ -332,11 +334,11 @@ func TestOpenSSL_ParsesOurCertificate(t *testing.T) {
 		},
 	}
 
-	ours, err := CreateCertificate(opts)
+	ours, err := gostcert.CreateCertificate(opts)
 	require.NoError(t, err, "create certificate")
 
 	certPath := filepath.Join(t.TempDir(), "ours.der")
-	require.NoError(t, os.WriteFile(certPath, ours.cert.Raw, 0o600))
+	require.NoError(t, os.WriteFile(certPath, ours.GetRawCertificate(), 0o600))
 
 	confPath, err := filepath.Abs("test/resources/certs/openssl-gost.conf")
 	require.NoError(t, err)
