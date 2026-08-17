@@ -21,10 +21,10 @@ import (
 )
 
 const (
-	tc26_256DerFilePath = "test/resources/certs/ref_tc26_256a.der"
+	tc26_256DerFilePath = "test/resources/cert/ref_tc26_256a.der"
 	tc26_256Scalar      = "3464E17D244BECFDE1C99D13FF03B93635BAEFD3EC5A3283E798EEAF86AC210D"
 
-	tc26_512DerFilePath = "test/resources/certs/ref_tc26_512a.der"
+	tc26_512DerFilePath = "test/resources/cert/ref_tc26_512a.der"
 	tc26_512Scalar      = "418740B6F8667BAE35A567D7DD504F844545B1F51A91899B195AADF74D9FB8D30DC87C0109957E150F1EE53404E36DEA569F2440383C75D917F56E1BDC29F549"
 )
 
@@ -101,7 +101,8 @@ func TestCreateCertificate_ReproducesOpenSSL(t *testing.T) {
 			// Rebuild the same key and sign with the identical parameters that
 			// OpenSSL used to produce the reference.
 			scalar := revBytes(mustHexString(t, tc.scalar))
-			signer := &internal.Signer{RawPrivateKey: scalar, CurveOID: tc.curve}
+			signer, err := internal.BuildSigner(tc.curve, scalar)
+			require.NoError(t, err, "build signer failed")
 
 			opts := &options.CreateCertificateOptions{
 				SerialNumber: new(big.Int).Set(std.SerialNumber),
@@ -309,7 +310,8 @@ func TestOpenSSL_ParsesOurCertificate(t *testing.T) {
 	notAfter := std.NotAfter.UTC()
 
 	scalar := revBytes(mustHexString(t, tc.scalar))
-	signer := &internal.Signer{RawPrivateKey: scalar, CurveOID: tc.curve}
+	signer, err := internal.BuildSigner(tc.curve, scalar)
+	require.NoError(t, err, "build signer failed")
 
 	opts := &options.CreateCertificateOptions{
 		SerialNumber: new(big.Int).Set(std.SerialNumber),
