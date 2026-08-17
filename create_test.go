@@ -5,7 +5,6 @@ import (
 	"encoding/asn1"
 	"fmt"
 	"math/big"
-	"os"
 	"testing"
 	"time"
 
@@ -15,10 +14,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/tarantool/go-gostcrypto"
 	"github.com/tarantool/go-gostcrypto/x509gost"
-)
-
-const (
-	newTestCertPath = "test/resources/certs/created-certificate-1.der"
 )
 
 func TestCreateCertificate_SelfSigned(t *testing.T) {
@@ -80,10 +75,6 @@ func TestCreateCertificate_SelfSigned(t *testing.T) {
 	//})
 	//assert.NoError(t, err, "failed to verify certificate")
 	//assert.NotEmpty(t, chains, "expected certificate chains is not empty")
-
-	// FIX: Remove after handle testing
-	err = os.WriteFile(newTestCertPath, cert.cert.Raw, 0600)
-	assert.NoError(t, err, "failed to write new test certificate")
 }
 
 func generateSerialNumber() (*big.Int, error) {

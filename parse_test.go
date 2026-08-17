@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	testCertPath = "test/resources/certs/certificate.der"
+	testCertPath = "test/resources/openssl/certificate.der"
 
 	certSerialNumber uint64 = 11317755370480200428
 )
