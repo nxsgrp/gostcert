@@ -31,9 +31,9 @@ func main() {
 	}
 
 	curveOID := gost.OIDParamTC26_256A
-	signer := &internal.Signer{
-		RawPrivateKey: rawPrivateKey,
-		CurveOID:      curveOID,
+	signer, err := internal.BuildSigner(curveOID, rawPrivateKey)
+	if err != nil {
+		log.Fatalf("failed to build signer: %v", err)
 	}
 
 	opts := &options.CreateCertificateOptions{
