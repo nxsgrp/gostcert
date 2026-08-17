@@ -36,7 +36,8 @@ func TestCreateCertificate_SelfSigned(t *testing.T) {
 	assert.NotNil(t, rawPrivateKey, "failed to generate private key")
 	assert.NotEmpty(t, rawPrivateKey, "expected private key is not empty")
 
-	signer := &internal.Signer{RawPrivateKey: rawPrivateKey, CurveOID: curveOID}
+	signer, err := internal.BuildSigner(curveOID, rawPrivateKey)
+	assert.NoError(t, err, "failed to build signer")
 
 	opts := &options.CreateCertificateOptions{
 		SerialNumber: serialNumber,
