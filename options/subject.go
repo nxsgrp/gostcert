@@ -4,6 +4,7 @@ import (
 	"encoding/asn1"
 	"fmt"
 
+	"github.com/nxsgrp/gostcert/gost"
 	"github.com/nxsgrp/gostcert/internal/models"
 	"github.com/tarantool/go-gostcrypto/x509gost"
 )
@@ -32,20 +33,22 @@ type SubjectPublicKeyOptions struct {
 
 	// Algorithm identifies the subject public key algorithm
 	// (e.g. AlgoR341012_256 for GOST R 34.10-2012 with a 256-bit key).
-	Algorithm x509gost.GOSTAlgorithm
+	Algorithm gost.GOSTAlgorithm
 
 	// RawPublicKey is the raw GOST public key in LE(X) || LE(Y) format.
 	RawPublicKey []byte
 }
 
 func (so *SubjectOptions) BuildSubject() (*models.Subject, error) {
+	algorithm := x509gost.GOSTAlgorithm(so.PublicKeyOptions.Algorithm)
+
 	subject, err := models.NewSubjectBuilder().
 		WithCommonName(so.Information.CommonName).
 		WithCountry(so.Information.Country).
 		WithOrganization(so.Information.Organization).
 		WithCurveOID(so.PublicKeyOptions.CurveOID).
-		WithAlgorithm(so.PublicKeyOptions.Algorithm).
 		WithPublicKey(so.PublicKeyOptions.RawPublicKey).
+		WithAlgorithm(algorithm).
 		Build()
 
 	if err != nil {

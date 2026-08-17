@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/nxsgrp/gostcert/gost"
 	"github.com/nxsgrp/gostcert/internal/models"
 	"github.com/tarantool/go-gostcrypto/x509gost"
 )
@@ -22,7 +23,7 @@ type IssuerOptions struct {
 	// SignAlgorithm identifies the signature algorithm used to sign
 	// the TBSCertificate (e.g. AlgoR341012_256 for
 	// GOST R 34.11-2012 with GOST R 34.10-2012).
-	SignAlgorithm x509gost.GOSTAlgorithm
+	SignAlgorithm gost.GOSTAlgorithm
 
 	// ParentCertificate is the issuer certificate. When set, the issued
 	// certificate uses the parent's Subject as the Issuer field.
@@ -31,10 +32,12 @@ type IssuerOptions struct {
 }
 
 func (io *IssuerOptions) BuildIssuer() (*models.Issuer, error) {
+	algorithm := x509gost.GOSTAlgorithm(io.SignAlgorithm)
+
 	issuer, err := models.NewIssuerBuilder().
 		WithParentCertificate(io.ParentCertificate).
-		WithSignAlgorithm(io.SignAlgorithm).
 		WithRandReader(io.RandReader).
+		WithSignAlgorithm(algorithm).
 		WithSigner(io.Signer).
 		Build()
 
