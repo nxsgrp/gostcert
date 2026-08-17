@@ -2,15 +2,18 @@ package gostcert
 
 import (
 	"crypto/rand"
+	"encoding/asn1"
+	"fmt"
 	"math/big"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/nxsgrp/gostcert/gost"
 	"github.com/nxsgrp/gostcert/internal"
 	"github.com/nxsgrp/gostcert/options"
 	"github.com/stretchr/testify/assert"
-	gost "github.com/tarantool/go-gostcrypto"
+	"github.com/tarantool/go-gostcrypto"
 	"github.com/tarantool/go-gostcrypto/x509gost"
 )
 
@@ -20,25 +23,20 @@ const (
 
 func TestCreateCertificate_SelfSigned(t *testing.T) {
 	// Generate a random 20-byte serial number (matching OpenSSL convention).
-	serialBytes := make([]byte, 20)
-	_, err := rand.Read(serialBytes)
-	assert.NoError(t, err, "failed to generate serial number")
-	serialNumber := new(big.Int).SetBytes(serialBytes)
+	serialNumber, err := generateSerialNumber()
+	assert.NoError(t, err, "unexpected error while generating serial number")
 
-	// Use the CryptoPro-A curve parameter set (matches the reference
-	// openssl-generated certificate).
-	curveOID := x509gost.OIDParamTC26_256A
-	curve, err := gost.CurveByOID(curveOID)
-	assert.NoError(t, err, "failed to generate curve oid")
-
-	privRaw, pubRaw, err := gost.GenerateEphemeralKey(curve, rand.Reader)
+	// Use the CryptoPro-A curve parameter set (matches the reference openssl-generated certificate).
+	curveOID := gost.OIDParamTC26_256A
+	rawPrivateKey, rawPublicKey, err := generateEphemeralKey(curveOID)
+	assert.NoError(t, err, "unexpected error while generating ephemeral key")
 	assert.NoError(t, err, "failed to generate ephemeral key")
-	assert.NotNil(t, pubRaw, "failed to generate public key")
-	assert.NotEmpty(t, pubRaw, "expected public key is not empty")
-	assert.NotNil(t, privRaw, "failed to generate private key")
-	assert.NotEmpty(t, privRaw, "expected private key is not empty")
+	assert.NotNil(t, rawPublicKey, "failed to generate public key")
+	assert.NotEmpty(t, rawPublicKey, "expected public key is not empty")
+	assert.NotNil(t, rawPrivateKey, "failed to generate private key")
+	assert.NotEmpty(t, rawPrivateKey, "expected private key is not empty")
 
-	signer := &internal.Signer{RawPrivateKey: privRaw, CurveOID: curveOID}
+	signer := &internal.Signer{RawPrivateKey: rawPrivateKey, CurveOID: curveOID}
 
 	opts := &options.CreateCertificateOptions{
 		SerialNumber: serialNumber,
@@ -52,14 +50,14 @@ func TestCreateCertificate_SelfSigned(t *testing.T) {
 			},
 			PublicKeyOptions: options.SubjectPublicKeyOptions{
 				CurveOID:     curveOID,
-				Algorithm:    x509gost.AlgoR341012_256,
-				RawPublicKey: pubRaw,
+				Algorithm:    gost.AlgoR341012_256,
+				RawPublicKey: rawPublicKey,
 			},
 		},
 		Issuer: options.IssuerOptions{
 			RandReader:        rand.Reader,
 			Signer:            signer,
-			SignAlgorithm:     x509gost.AlgoR341012_256,
+			SignAlgorithm:     gost.AlgoR341012_256,
 			ParentCertificate: nil,
 		},
 	}
@@ -85,4 +83,29 @@ func TestCreateCertificate_SelfSigned(t *testing.T) {
 	// FIX: Remove after handle testing
 	err = os.WriteFile(newTestCertPath, cert.cert.Raw, 0600)
 	assert.NoError(t, err, "failed to write new test certificate")
+}
+
+func generateSerialNumber() (*big.Int, error) {
+	serialBytes := make([]byte, 20)
+	_, err := rand.Read(serialBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate serial number: %w", err)
+	}
+
+	serialNumber := new(big.Int).SetBytes(serialBytes)
+	return serialNumber, nil
+}
+
+func generateEphemeralKey(curveOID asn1.ObjectIdentifier) ([]byte, []byte, error) {
+	curveObject, err := gostcrypto.CurveByOID(curveOID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get curve object: %w", err)
+	}
+
+	privRaw, pubRaw, err := gostcrypto.GenerateEphemeralKey(curveObject, rand.Reader)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to generate private key: %v", err)
+	}
+
+	return pubRaw, privRaw, nil
 }
