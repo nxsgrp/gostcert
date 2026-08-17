@@ -2,17 +2,16 @@ package main
 
 import (
 	"crypto/rand"
-	"encoding/asn1"
 	"fmt"
 	"log"
 	"math/big"
+	"os"
 	"time"
 
 	"github.com/nxsgrp/gostcert"
 	"github.com/nxsgrp/gostcert/gost"
 	"github.com/nxsgrp/gostcert/internal"
 	"github.com/nxsgrp/gostcert/options"
-	"github.com/tarantool/go-gostcrypto"
 )
 
 func main() {
@@ -21,13 +20,21 @@ func main() {
 		log.Fatalf("failed to generate serial number: %v", err)
 	}
 
-	curveOID := gost.OIDParamTC26_256A
-	rawPrivateKey, rawPublicKey, err := generateEphemeralKey(curveOID)
+	rawPrivateKey, err := os.ReadFile("private.key")
 	if err != nil {
-		log.Fatalf("failed to generate keys: %v", err)
+		log.Fatalf("failed to read private key: %v", err)
 	}
 
-	signer := &internal.Signer{RawPrivateKey: rawPrivateKey, CurveOID: curveOID}
+	rawPublicKey, err := os.ReadFile("public.key")
+	if err != nil {
+		log.Fatalf("failed to read public key: %v", err)
+	}
+
+	curveOID := gost.OIDParamTC26_256A
+	signer := &internal.Signer{
+		RawPrivateKey: rawPrivateKey,
+		CurveOID:      curveOID,
+	}
 
 	opts := &options.CreateCertificateOptions{
 		SerialNumber: serialNumber,
@@ -77,18 +84,4 @@ func generateSerialNumber() (*big.Int, error) {
 
 	serialNumber := new(big.Int).SetBytes(serialBytes)
 	return serialNumber, nil
-}
-
-func generateEphemeralKey(curveOID asn1.ObjectIdentifier) ([]byte, []byte, error) {
-	curveObject, err := gostcrypto.CurveByOID(curveOID)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get curve object: %w", err)
-	}
-
-	privRaw, pubRaw, err := gostcrypto.GenerateEphemeralKey(curveObject, rand.Reader)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to generate private key: %v", err)
-	}
-
-	return pubRaw, privRaw, nil
 }
