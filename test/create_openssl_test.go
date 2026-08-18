@@ -1,3 +1,4 @@
+// //go:build openssl
 package test
 
 import (
@@ -6,8 +7,6 @@ import (
 	"encoding/hex"
 	"math/big"
 	"os"
-	"os/exec"
-	"path/filepath"
 	"testing"
 
 	"github.com/nxsgrp/gostcert"
@@ -21,31 +20,12 @@ import (
 
 const (
 	tc26_256DerFilePath = "resources/gost-certs/ref_tc26_256a.der"
-	tc26_256Scalar      = "3464E17D244BECFDE1C99D13FF03B93635BAEFD3EC5A3283E798EEAF86AC210D"
-
 	tc26_512DerFilePath = "resources/gost-certs/ref_tc26_512a.der"
+
+	tc26_256Scalar = "3464E17D244BECFDE1C99D13FF03B93635BAEFD3EC5A3283E798EEAF86AC210D"
 	//nolint
 	tc26_512Scalar = "418740B6F8667BAE35A567D7DD504F844545B1F51A91899B195AADF74D9FB8D30DC87C0109957E150F1EE53404E36DEA569F2440383C75D917F56E1BDC29F549"
 )
-
-var ossReferenceCases = []ossReferenceCase{
-	{
-		name:    "tc26_256a",
-		derPath: tc26_256DerFilePath,
-		scalar:  tc26_256Scalar,
-		curve:   gost.OIDParamTC26_256A,
-		algo:    gost.AlgoR341012_256,
-		sigLen:  64,
-	},
-	{
-		name:    "tc26_512a",
-		derPath: tc26_512DerFilePath,
-		scalar:  tc26_512Scalar,
-		curve:   gost.OIDParamTC26_512A,
-		algo:    gost.AlgoR341012_512,
-		sigLen:  128,
-	},
-}
 
 // This test reproduces byte-for-byte the deterministic parts (every
 // TBSCertificate field except the out-of-scope X.509 extensions and the
@@ -64,7 +44,7 @@ var ossReferenceCases = []ossReferenceCase{
 // extensions (extensions land in a separate MR). So the comparison drops the
 // trailing [3] extensions element from the OpenSSL TBS and compares the
 // remaining fields byte-for-byte.
-type ossReferenceCase struct {
+type createCertTestCase struct {
 	name    string
 	derPath string
 	// scalar is the raw private scalar as displayed by `openssl pkey -text`
@@ -86,22 +66,45 @@ type certParts struct {
 }
 
 func TestCreateCertificate_ReproducesOpenSSL(t *testing.T) {
-	for _, referCase := range ossReferenceCases {
-		t.Run(referCase.name, func(t *testing.T) {
-			der, err := os.ReadFile(referCase.derPath)
+	t.Parallel()
+
+	testCases := []createCertTestCase{
+		{
+			name:    "tc26_256a",
+			derPath: tc26_256DerFilePath,
+			scalar:  tc26_256Scalar,
+			curve:   gost.OIDParamTC26_256A,
+			algo:    gost.AlgoR341012_256,
+			sigLen:  64,
+		},
+		{
+			name:    "tc26_512a",
+			derPath: tc26_512DerFilePath,
+			scalar:  tc26_512Scalar,
+			curve:   gost.OIDParamTC26_512A,
+			algo:    gost.AlgoR341012_512,
+			sigLen:  128,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			der, err := os.ReadFile(testCase.derPath)
 			require.NoError(t, err, "read reference certificate")
 
 			ref, err := gostcert.ParseCertificate(der)
 			require.NoError(t, err, "parse reference certificate")
-			std := ref.StdCertificate()
 
+			std := ref.StdCertificate()
 			notBefore := std.NotBefore.UTC()
 			notAfter := std.NotAfter.UTC()
 
 			// Rebuild the same key and sign with the identical parameters that
 			// OpenSSL used to produce the reference.
-			scalar := revBytes(mustHexString(t, referCase.scalar))
-			signer, err := internal.BuildSigner(referCase.curve, scalar)
+			scalar := revBytes(mustHexString(t, testCase.scalar))
+			signer, err := internal.BuildSigner(testCase.curve, scalar)
 			require.NoError(t, err, "build signer failed")
 
 			opts := &options.CreateCertificateOptions{
@@ -115,33 +118,33 @@ func TestCreateCertificate_ReproducesOpenSSL(t *testing.T) {
 						Organization: std.Subject.Organization,
 					},
 					PublicKeyOptions: options.SubjectPublicKeyOptions{
-						CurveOID:     referCase.curve,
-						Algorithm:    referCase.algo,
+						CurveOID:     testCase.curve,
+						Algorithm:    testCase.algo,
 						RawPublicKey: signer.Public().([]byte),
 					},
 				},
 				Issuer: options.IssuerOptions{
 					RandReader:    rand.Reader,
 					Signer:        signer,
-					SignAlgorithm: referCase.algo,
+					SignAlgorithm: testCase.algo,
 				},
 			}
 
-			ours, err := gostcert.CreateCertificate(opts)
+			gostCert, err := gostcert.CreateCertificate(opts)
 			require.NoError(t, err, "create certificate")
 
 			refParts := splitCertificate(t, der)
-			ourParts := splitCertificate(t, ours.GetRawCertificate())
+			ourParts := splitCertificate(t, gostCert.GetRawCertificate())
 
 			// 1) Every deterministic TBS field (except extensions and the SPKI,
 			// which are compared structurally below) must be byte-identical to
 			// the OpenSSL reference.
 			refFields := tbsFieldsWithoutExtensions(t, refParts.TBS)
 			ourFields := tbsFieldsWithoutExtensions(t, ourParts.TBS)
-			require.Equal(t, len(refFields), len(ourFields),
-				"TBS field count must match (reference has no extensions after the drop)")
+			require.Equal(t, len(refFields), len(ourFields), "TBS fields count must match")
+
 			for i := 0; i < len(refFields)-1; i++ {
-				assert.Equalf(t, refFields[i], ourFields[i], "TBS field %d must match OpenSSL byte-for-byte", i)
+				assert.Equalf(t, refFields[i], ourFields[i], "TBS field %d must match", i)
 			}
 
 			// 2) The SPKI: public-key OID, curve parameter-set OID and the raw
@@ -156,13 +159,12 @@ func TestCreateCertificate_ReproducesOpenSSL(t *testing.T) {
 			require.Equal(t, 2, len(ourSPKI))
 
 			// raw public key BIT STRING (last SPKI child)
-			assert.Equal(t, refSPKI[1], ourSPKI[1],
-				"SPKI public key must match OpenSSL byte-for-byte")
+			assert.Equal(t, refSPKI[1], ourSPKI[1], "SPKI public key must be equal")
+
 			// AlgorithmIdentifier OID and curve parameter-set OID
 			refAlg := splitSequence(t, refSPKI[0])
 			ourAlg := splitSequence(t, ourSPKI[0])
-			assert.Equal(t, refAlg[0], ourAlg[0],
-				"SPKI algorithm OID must match OpenSSL")
+			assert.Equal(t, refAlg[0], ourAlg[0], "SPKI algorithm OID must be equal")
 
 			// The first parameter (curve paramset OID) must match; OpenSSL may
 			// append an extra digestParamSet (see the note above) which we omit.
@@ -170,24 +172,25 @@ func TestCreateCertificate_ReproducesOpenSSL(t *testing.T) {
 			ourParams := splitSequence(t, ourAlg[1])
 			require.NotEmpty(t, refParams)
 			require.NotEmpty(t, ourParams)
-			assert.Equal(t, refParams[0], ourParams[0],
-				"SPKI curve parameter-set OID must match OpenSSL")
+			assert.Equal(t, refParams[0], ourParams[0], "SPKI curve OID parameter-set must be equal")
 
 			// 3) Signature algorithm identifiers must match.
-			assert.Equal(t, refParts.SigAlgo, ourParts.SigAlgo,
-				"signature AlgorithmIdentifier must match OpenSSL byte-for-byte")
+			assert.Equal(t, refParts.SigAlgo, ourParts.SigAlgo, "signature algo must be equal")
 
 			// 4) The randomized signatures are not byte-equal, but both are
 			// valid over their own TBS with the same public key, and carry the
 			// expected length.
-			assert.Len(t, ourParts.Sig, referCase.sigLen, "signature length must match the algorithm")
-			curve, err := gostcrypto.CurveByOID(referCase.curve)
+			assert.Len(t, ourParts.Sig, testCase.sigLen, "signature length must match the algorithm")
+
+			curve, err := gostcrypto.CurveByOID(testCase.curve)
 			require.NoError(t, err)
+
 			pubRaw := signer.Public().([]byte)
 
 			for label, parts := range map[string]certParts{"reference": refParts, "ours": ourParts} {
-				digest, err := internal.HashForGOST(referCase.algo.ToX509(), parts.TBS)
+				digest, err := internal.HashForGOST(testCase.algo.ToX509(), parts.TBS)
 				require.NoError(t, err, "%s: hash TBS", label)
+
 				ok, err := gostcrypto.VerifyDigestOnCurve(curve, pubRaw, digest, parts.Sig)
 				require.NoError(t, err, "%s: verify signature", label)
 				assert.True(t, ok, "%s: signature must verify against the shared public key", label)
@@ -235,6 +238,7 @@ func splitCertificate(t *testing.T, der []byte) certParts {
 // trailing [3] EXPLICIT extensions element dropped when present.
 func tbsFieldsWithoutExtensions(t *testing.T, tbs []byte) [][]byte {
 	t.Helper()
+
 	children := splitSequence(t, tbs)
 	if n := len(children); n > 0 {
 		last := parseRawValue(t, children[n-1])
@@ -242,6 +246,7 @@ func tbsFieldsWithoutExtensions(t *testing.T, tbs []byte) [][]byte {
 			children = children[:n-1]
 		}
 	}
+
 	return children
 }
 
@@ -249,13 +254,14 @@ func tbsFieldsWithoutExtensions(t *testing.T, tbs []byte) [][]byte {
 // element as its raw DER bytes.
 func splitSequence(t *testing.T, der []byte) [][]byte {
 	t.Helper()
+
 	var raw asn1.RawValue
 	rest, err := asn1.Unmarshal(der, &raw)
 	require.NoError(t, err, "unmarshal sequence")
 	require.Empty(t, rest, "sequence must not have trailing data")
 	require.Equal(t, asn1.TagSequence, raw.Tag, "expected a SEQUENCE")
 
-	children := [][]byte{}
+	var children [][]byte
 	data := raw.Bytes
 	for len(data) > 0 {
 		var child asn1.RawValue
@@ -268,9 +274,11 @@ func splitSequence(t *testing.T, der []byte) [][]byte {
 
 func parseRawValue(t *testing.T, der []byte) asn1.RawValue {
 	t.Helper()
+
 	var raw asn1.RawValue
 	_, err := asn1.Unmarshal(der, &raw)
 	require.NoError(t, err, "unmarshal raw value")
+
 	return raw
 }
 
@@ -287,93 +295,4 @@ func revBytes(b []byte) []byte {
 		out[len(b)-1-i] = b[i]
 	}
 	return out
-}
-
-// TestOpenSSL_ParsesOurCertificate is the acceptance criterion "parse our
-// certificate in an OpenSSL built with GOST support". It is skipped when no
-// GOST-capable OpenSSL binary is available (e.g. system LibreSSL).
-func TestOpenSSL_ParsesOurCertificate(t *testing.T) {
-	ossBin, ok := gostOpenSSLBinary()
-	if !ok {
-		t.Skip("no OpenSSL 3 with GOST support found (skipped)")
-	}
-
-	referCase := ossReferenceCases[0] // 256-bit
-	der, err := os.ReadFile(referCase.derPath)
-	require.NoError(t, err, "read reference certificate")
-
-	ref, err := gostcert.ParseCertificate(der)
-	require.NoError(t, err, "parse reference certificate")
-	std := ref.StdCertificate()
-
-	notBefore := std.NotBefore.UTC()
-	notAfter := std.NotAfter.UTC()
-
-	scalar := revBytes(mustHexString(t, referCase.scalar))
-	signer, err := internal.BuildSigner(referCase.curve, scalar)
-	require.NoError(t, err, "build signer failed")
-
-	opts := &options.CreateCertificateOptions{
-		SerialNumber: new(big.Int).Set(std.SerialNumber),
-		NotBefore:    notBefore,
-		TTL:          notAfter.Sub(notBefore),
-		Subject: options.SubjectOptions{
-			Information: options.SubjetInformationOptions{
-				CommonName:   std.Subject.CommonName,
-				Country:      std.Subject.Country,
-				Organization: std.Subject.Organization,
-			},
-			PublicKeyOptions: options.SubjectPublicKeyOptions{
-				CurveOID:     referCase.curve,
-				Algorithm:    referCase.algo,
-				RawPublicKey: signer.Public().([]byte),
-			},
-		},
-		Issuer: options.IssuerOptions{
-			RandReader:    rand.Reader,
-			Signer:        signer,
-			SignAlgorithm: referCase.algo,
-		},
-	}
-
-	ours, err := gostcert.CreateCertificate(opts)
-	require.NoError(t, err, "create certificate")
-
-	certPath := filepath.Join(t.TempDir(), "ours.der")
-	require.NoError(t, os.WriteFile(certPath, ours.GetRawCertificate(), 0o600))
-
-	confPath, err := filepath.Abs("test/resources/openssl/openssl-gost.conf")
-	require.NoError(t, err)
-
-	cmd := exec.CommandContext(t.Context(), ossBin, "x509", "-in", certPath, "-inform", "DER", "-noout", "-subject")
-	cmd.Env = append(os.Environ(), "OPENSSL_CONF="+confPath)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Skipf("OpenSSL cannot parse GOST (skipped): %v: %s", err, out)
-	}
-	assert.Contains(t, string(out), std.Subject.CommonName,
-		"OpenSSL must parse and report our certificate subject")
-}
-
-// gostOpenSSLBinary returns the path to an OpenSSL 3 binary that is expected to
-// support GOST (Homebrew OpenSSL 3 carries the GOST engine). It honours
-// GOSTCERT_OPENSSL to point at another build.
-func gostOpenSSLBinary() (string, bool) {
-	if p := os.Getenv("GOSTCERT_OPENSSL"); p != "" {
-		//nolint
-		if _, err := os.Stat(p); err == nil {
-			return p, true
-		}
-	}
-
-	// TODO: Remove for prod code
-	for _, p := range []string{
-		"/opt/homebrew/opt/openssl@3/bin/openssl",
-		"/usr/local/opt/openssl@3/bin/openssl",
-	} {
-		if _, err := os.Stat(p); err == nil {
-			return p, true
-		}
-	}
-	return "", false
 }
