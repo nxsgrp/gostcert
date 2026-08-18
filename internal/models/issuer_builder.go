@@ -58,7 +58,7 @@ func (ib *IssuerBuilder) Build() (*Issuer, error) {
 func (ib *IssuerBuilder) validateSignAlgorithm() error {
 	// Checking using forbidden algorithm.
 	if ib.issuer.SignAlgorithm == x509gost.AlgoR341001 {
-		return fmt.Errorf("the GOST R 34.10-2001 algorithm was been forbidden")
+		return fmt.Errorf("use of the GOST R 34.10-2001 algorithm has been prohibited")
 	}
 	return nil
 }
