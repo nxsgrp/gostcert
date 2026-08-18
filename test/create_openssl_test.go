@@ -17,7 +17,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tarantool/go-gostcrypto"
-	"github.com/tarantool/go-gostcrypto/x509gost"
 )
 
 const (
@@ -187,7 +186,7 @@ func TestCreateCertificate_ReproducesOpenSSL(t *testing.T) {
 			pubRaw := signer.Public().([]byte)
 
 			for label, parts := range map[string]certParts{"reference": refParts, "ours": ourParts} {
-				digest, err := internal.HashForGOST(x509gost.GOSTAlgorithm(referCase.algo), parts.TBS)
+				digest, err := internal.HashForGOST(referCase.algo.ToX509(), parts.TBS)
 				require.NoError(t, err, "%s: hash TBS", label)
 				ok, err := gostcrypto.VerifyDigestOnCurve(curve, pubRaw, digest, parts.Sig)
 				require.NoError(t, err, "%s: verify signature", label)

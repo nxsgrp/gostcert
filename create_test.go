@@ -23,7 +23,7 @@ func TestCreateCertificate_SelfSigned(t *testing.T) {
 
 	// Use the CryptoPro-A curve parameter set (matches the reference openssl-generated certificate).
 	curveOID := x509gost.OIDParamTC26_512A
-	rawPrivateKey, rawPublicKey, err := generateEphemeralKey(curveOID)
+	rawPublicKey, rawPrivateKey, err := generateEphemeralKey(curveOID)
 	assert.NoError(t, err, "unexpected error while generating ephemeral key")
 	assert.NoError(t, err, "failed to generate ephemeral key")
 	assert.NotNil(t, rawPublicKey, "failed to generate public key")
@@ -66,8 +66,8 @@ func TestCreateCertificate_SelfSigned(t *testing.T) {
 	assert.NotEmpty(t, cert.cert.Raw, "expected cert raw bytes is not empty")
 	assert.NotEmpty(t, cert.cert.PubKeyRaw, "expected cert public key is not empty")
 	assert.NotEmpty(t, cert.cert.Stdlib.Subject.CommonName, "expected subject common name is not empty")
-	assert.Equal(t, cert.cert.GOSTAlgo, x509gost.AlgoR341012_256, "expected AlgoR341012_256 algorithm")
-	assert.Equal(t, cert.cert.SigGOSTAlgo, x509gost.AlgoR341012_256, "expected AlgoR341012_256 signature algorithm")
+	assert.Equal(t, cert.cert.GOSTAlgo, x509gost.AlgoR341012_512, "expected AlgoR341012_512 algorithm")
+	assert.Equal(t, cert.cert.SigGOSTAlgo, x509gost.AlgoR341012_512, "expected AlgoR341012_512 signature algorithm")
 
 	// Verify via x509gost
 	//nolint
