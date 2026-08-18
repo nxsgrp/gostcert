@@ -1,4 +1,5 @@
-// //go:build openssl
+//go:build openssl
+
 package test
 
 import (
