@@ -17,7 +17,22 @@ type CertificateInformation struct {
 	NotAfter time.Time
 }
 
-func (c *CertificateInformation) Validate() error {
+func CreateCertificateInformation(serial *big.Int, notBefore, notAfter time.Time) (*CertificateInformation, error) {
+	certInfo := &CertificateInformation{
+		SerialNumber: serial,
+		NotAfter:     notAfter,
+		NotBefore:    notBefore,
+	}
+
+	err := certInfo.validate()
+	if err != nil {
+		return nil, fmt.Errorf("validating certificate information: %w", err)
+	}
+
+	return certInfo, nil
+}
+
+func (c *CertificateInformation) validate() error {
 	if c.SerialNumber == nil {
 		return fmt.Errorf("serial number is required")
 	}

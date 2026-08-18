@@ -1,10 +1,13 @@
 package models
 
 import (
+	"crypto/rand"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/asn1"
+	"math/big"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -18,21 +21,18 @@ const (
 )
 
 func TestSubjectBuilder(t *testing.T) {
-	subject := Subject{
-		Information: SubjetInformation{
-			CommonName:   testCommonName,
-			Country:      []string{testCountry},
-			Organization: []string{testOrganization},
-		},
-		PublicKey: SubjectPublicKey{
-			Algorithm:    x509gost.AlgoR341012_256,
-			CurveOID:     x509gost.OIDParamTC26_256A,
-			RawPublicKey: keyLen(64),
-		},
-	}
-
-	err := subject.Validate()
+	subjectInfo, err := CreateSubjectInformation(testCommonName, []string{testCountry}, []string{testOrganization})
 	require.NoError(t, err)
+
+	subjectPublicKey, err := CreateSubjectPublicKey(
+		x509gost.OIDParamTC26_256A,
+		x509gost.AlgoR341012_256,
+		keyLen(64),
+	)
+	require.NoError(t, err)
+
+	subject := CreateSubject(subjectInfo, subjectPublicKey)
+	require.NotNil(t, subject)
 
 	name := subject.GetPkixName()
 	assert.Equal(t, testCommonName, name.CommonName)
@@ -47,83 +47,71 @@ func TestSubjectBuilder(t *testing.T) {
 	assert.Equal(t, keyLen(64), subject.PublicKey.RawPublicKey)
 }
 
-func TestSubjectBuilderWithEmptyPublicKey(t *testing.T) {
-	subject := Subject{
-		Information: SubjetInformation{
-			CommonName:   testCommonName,
-			Country:      []string{testCountry},
-			Organization: []string{testOrganization},
-		},
-	}
-
-	err := subject.Validate()
-	require.Error(t, err)
-	require.Nil(t, subject)
-}
-
-func TestIssuerGetParentCertificate(t *testing.T) {
-	t.Run("nil when not set", func(t *testing.T) {
-		issuer := &Issuer{}
-		assert.Nil(t, issuer.GetParentCertificate())
+func TestCreateSubjectInformation(t *testing.T) {
+	t.Run("valid", func(t *testing.T) {
+		info, err := CreateSubjectInformation(testCommonName, []string{testCountry}, []string{testOrganization})
+		require.NoError(t, err)
+		assert.Equal(t, testCommonName, info.CommonName)
+		assert.Equal(t, []string{testCountry}, info.Country)
+		assert.Equal(t, []string{testOrganization}, info.Organization)
 	})
 
-	t.Run("returns the set certificate", func(t *testing.T) {
-		parent := &x509.Certificate{Subject: pkix.Name{CommonName: "Parent"}}
-		issuer := &Issuer{ParentCertificate: parent}
-		assert.Same(t, parent, issuer.GetParentCertificate())
+	t.Run("missing common name", func(t *testing.T) {
+		_, err := CreateSubjectInformation("", []string{testCountry}, []string{testOrganization})
+		require.Error(t, err)
+	})
+
+	t.Run("missing country", func(t *testing.T) {
+		_, err := CreateSubjectInformation(testCommonName, nil, []string{testOrganization})
+		require.Error(t, err)
+	})
+
+	t.Run("missing organization", func(t *testing.T) {
+		_, err := CreateSubjectInformation(testCommonName, []string{testCountry}, nil)
+		require.Error(t, err)
 	})
 }
 
 func TestSubjectBuilderWithForbiddenAlgorithm(t *testing.T) {
-	subject := Subject{
-		Information: SubjetInformation{
-			CommonName:   testCommonName,
-			Country:      []string{testCountry},
-			Organization: []string{testOrganization},
-		},
-		PublicKey: SubjectPublicKey{
-			Algorithm:    x509gost.AlgoR341001,
-			CurveOID:     x509gost.OIDParamTC26_256A,
-			RawPublicKey: []byte{0x01, 0x02, 0x03},
-		},
-	}
-
-	err := subject.Validate()
+	_, err := CreateSubjectPublicKey(
+		x509gost.OIDParamTC26_256A,
+		x509gost.AlgoR341001,
+		keyLen(64),
+	)
 	require.Error(t, err)
-	require.Nil(t, subject)
+	require.ErrorIs(t, err, ErrForbidden)
 }
 
 func TestSubjectBuilderWithForbiddenCurve(t *testing.T) {
-	subject := Subject{
-		Information: SubjetInformation{
-			CommonName:   testCommonName,
-			Country:      []string{testCountry},
-			Organization: []string{testOrganization},
-		},
-		PublicKey: SubjectPublicKey{
-			Algorithm:    x509gost.AlgoR341012_256,
-			CurveOID:     x509gost.OIDParamCryptoProA,
-			RawPublicKey: []byte{0x01, 0x02, 0x03},
-		},
-	}
-
-	err := subject.Validate()
+	_, err := CreateSubjectPublicKey(
+		x509gost.OIDParamCryptoProA,
+		x509gost.AlgoR341012_256,
+		keyLen(64),
+	)
 	require.Error(t, err)
-	require.Nil(t, subject)
+	require.ErrorIs(t, err, ErrForbidden)
+}
+
+func TestCreateSubjectPublicKeyRequiredFields(t *testing.T) {
+	t.Run("missing curve oid", func(t *testing.T) {
+		_, err := CreateSubjectPublicKey(nil, x509gost.AlgoR341012_256, keyLen(64))
+		require.Error(t, err)
+	})
+
+	t.Run("missing raw public key", func(t *testing.T) {
+		_, err := CreateSubjectPublicKey(x509gost.OIDParamTC26_256A, x509gost.AlgoR341012_256, nil)
+		require.Error(t, err)
+	})
 }
 
 func TestSubjectBuilderValid256(t *testing.T) {
-	subject := buildSubject(x509gost.OIDParamTC26_256A, x509gost.AlgoR341012_256, keyLen(64))
-	err := subject.Validate()
+	_, err := CreateSubjectPublicKey(x509gost.OIDParamTC26_256A, x509gost.AlgoR341012_256, keyLen(64))
 	require.NoError(t, err)
-	require.NotNil(t, subject)
 }
 
 func TestSubjectBuilderValid512(t *testing.T) {
-	subject := buildSubject(x509gost.OIDParamTC26_512A, x509gost.AlgoR341012_512, keyLen(128))
-	err := subject.Validate()
+	_, err := CreateSubjectPublicKey(x509gost.OIDParamTC26_512A, x509gost.AlgoR341012_512, keyLen(128))
 	require.NoError(t, err)
-	require.NotNil(t, subject)
 }
 
 // TestSubjectBuilderDigitMismatch verifies that mixing an algorithm and a curve
@@ -141,10 +129,8 @@ func TestSubjectBuilderDigitMismatch(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			subject := buildSubject(tt.curve, tt.algo, tt.pub)
-			err := subject.Validate()
+			_, err := CreateSubjectPublicKey(tt.curve, tt.algo, tt.pub)
 			require.Error(t, err)
-			require.Nil(t, subject)
 			require.ErrorIs(t, err, ErrForbidden)
 		})
 	}
@@ -168,10 +154,8 @@ func TestSubjectBuilderKeyLengthMismatch(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			subject := buildSubject(tt.curve, tt.algo, tt.pub)
-			err := subject.Validate()
+			_, err := CreateSubjectPublicKey(tt.curve, tt.algo, tt.pub)
 			require.Error(t, err)
-			require.Nil(t, subject)
 			require.ErrorIs(t, err, ErrInvalidPublicKeyLength)
 		})
 	}
@@ -182,33 +166,70 @@ func TestSubjectBuilderKeyLengthMismatch(t *testing.T) {
 func TestSubjectBuilderUnknownCurve(t *testing.T) {
 	unknown := asn1.ObjectIdentifier{1, 2, 3, 4, 5}
 
-	subject := buildSubject(unknown, x509gost.AlgoR341012_256, keyLen(64))
-	err := subject.Validate()
+	_, err := CreateSubjectPublicKey(unknown, x509gost.AlgoR341012_256, keyLen(64))
 	require.Error(t, err)
-	require.Nil(t, subject)
 	require.ErrorIs(t, err, ErrForbidden)
+}
+
+func TestIssuerGetParentCertificate(t *testing.T) {
+	t.Run("nil when not set", func(t *testing.T) {
+		issuer := &Issuer{}
+		assert.Nil(t, issuer.GetParentCertificate())
+	})
+
+	t.Run("returns the set certificate", func(t *testing.T) {
+		parent := &x509.Certificate{Subject: pkix.Name{CommonName: "Parent"}}
+		issuer := &Issuer{ParentCertificate: parent}
+		assert.Same(t, parent, issuer.GetParentCertificate())
+	})
+}
+
+func TestCreateIssuer(t *testing.T) {
+	t.Run("valid", func(t *testing.T) {
+		issuer, err := CreateIssuer(rand.Reader, stubSigner{}, x509gost.AlgoR341012_256, nil)
+		require.NoError(t, err)
+		require.NotNil(t, issuer)
+	})
+
+	t.Run("nil rand reader", func(t *testing.T) {
+		_, err := CreateIssuer(nil, stubSigner{}, x509gost.AlgoR341012_256, nil)
+		require.Error(t, err)
+	})
+
+	t.Run("nil signer", func(t *testing.T) {
+		_, err := CreateIssuer(rand.Reader, nil, x509gost.AlgoR341012_256, nil)
+		require.Error(t, err)
+	})
+
+	t.Run("forbidden algorithm", func(t *testing.T) {
+		_, err := CreateIssuer(rand.Reader, stubSigner{}, x509gost.AlgoR341001, nil)
+		require.Error(t, err)
+	})
+}
+
+func TestCreateCertificateInformation(t *testing.T) {
+	now := time.Now()
+
+	t.Run("valid", func(t *testing.T) {
+		info, err := CreateCertificateInformation(big.NewInt(1), now, now.Add(time.Hour))
+		require.NoError(t, err)
+		require.NotNil(t, info)
+		assert.Equal(t, big.NewInt(1), info.SerialNumber)
+	})
+
+	t.Run("missing serial number", func(t *testing.T) {
+		_, err := CreateCertificateInformation(nil, now, now.Add(time.Hour))
+		require.Error(t, err)
+	})
+
+	t.Run("not after before not before", func(t *testing.T) {
+		_, err := CreateCertificateInformation(big.NewInt(1), now, now.Add(-time.Hour))
+		require.Error(t, err)
+	})
 }
 
 // keyLen returns a pubkey of exactly n bytes so key-length validation can be
 // triggered with a precise value.
 func keyLen(n int) []byte {
 	return make([]byte, n)
-}
-
-// buildSubject is a helper that constructs a Subject with the given curve OID,
-// algorithm and raw public key (lengths are chosen by the caller so the key
-// length / digit validations can be exercised independently).
-func buildSubject(curveOID asn1.ObjectIdentifier, algo x509gost.GOSTAlgorithm, pubKey []byte) *Subject {
-	return &Subject{
-		Information: SubjetInformation{
-			CommonName:   testCommonName,
-			Country:      []string{testCountry},
-			Organization: []string{testOrganization},
-		},
-		PublicKey: SubjectPublicKey{
-			Algorithm:    algo,
-			CurveOID:     curveOID,
-			RawPublicKey: pubKey,
-		},
-	}
 }

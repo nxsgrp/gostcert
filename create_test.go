@@ -22,7 +22,7 @@ func TestCreateCertificate_SelfSigned(t *testing.T) {
 	assert.NoError(t, err, "unexpected error while generating serial number")
 
 	// Use the CryptoPro-A curve parameter set (matches the reference openssl-generated certificate).
-	curveOID := gost.OIDParamTC26_256A
+	curveOID := x509gost.OIDParamTC26_512A
 	rawPrivateKey, rawPublicKey, err := generateEphemeralKey(curveOID)
 	assert.NoError(t, err, "unexpected error while generating ephemeral key")
 	assert.NoError(t, err, "failed to generate ephemeral key")
@@ -46,14 +46,14 @@ func TestCreateCertificate_SelfSigned(t *testing.T) {
 			},
 			PublicKeyOptions: options.SubjectPublicKeyOptions{
 				CurveOID:     curveOID,
-				Algorithm:    gost.AlgoR341012_256,
+				Algorithm:    gost.AlgoR341012_512,
 				RawPublicKey: rawPublicKey,
 			},
 		},
 		Issuer: options.IssuerOptions{
 			RandReader:        rand.Reader,
 			Signer:            signer,
-			SignAlgorithm:     gost.AlgoR341012_256,
+			SignAlgorithm:     gost.AlgoR341012_512,
 			ParentCertificate: nil,
 		},
 	}

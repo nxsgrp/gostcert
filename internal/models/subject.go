@@ -38,6 +38,21 @@ type Subject struct {
 	PublicKey   SubjectPublicKey
 }
 
+func CreateSubject(information SubjetInformation, publicKey SubjectPublicKey) *Subject {
+	return &Subject{
+		Information: information,
+		PublicKey:   publicKey,
+	}
+}
+
+func (s *Subject) GetPkixName() pkix.Name {
+	return pkix.Name{
+		CommonName:   s.Information.CommonName,
+		Country:      s.Information.Country,
+		Organization: s.Information.Organization,
+	}
+}
+
 // SubjetInformation contains necessary information of certificate publisher.
 type SubjetInformation struct {
 	// CommonName is the (CN) for the certificate subject.
@@ -46,6 +61,38 @@ type SubjetInformation struct {
 	Country []string
 	// Organization is the (O) values for the certificate subject.
 	Organization []string
+}
+
+func CreateSubjectInformation(commonName string, country, organization []string) (SubjetInformation, error) {
+	var subInfo SubjetInformation
+	subInfo = SubjetInformation{
+		CommonName:   commonName,
+		Country:      country,
+		Organization: organization,
+	}
+
+	err := subInfo.validate()
+	if err != nil {
+		return subInfo, fmt.Errorf("validating subject info: %w", err)
+	}
+
+	return subInfo, nil
+}
+
+func (si *SubjetInformation) validate() error {
+	if si.CommonName == "" {
+		return fmt.Errorf("common name is required")
+	}
+
+	if len(si.Country) == 0 {
+		return fmt.Errorf("country is required")
+	}
+
+	if len(si.Organization) == 0 {
+		return fmt.Errorf("organization is required")
+	}
+
+	return nil
 }
 
 // SubjectPublicKey contains subject public key options.
@@ -62,37 +109,49 @@ type SubjectPublicKey struct {
 	RawPublicKey []byte
 }
 
-func (s *Subject) GetPkixName() pkix.Name {
-	return pkix.Name{
-		CommonName:   s.Information.CommonName,
-		Country:      s.Information.Country,
-		Organization: s.Information.Organization,
+func CreateSubjectPublicKey(
+	curveOID asn1.ObjectIdentifier,
+	algorithm x509gost.GOSTAlgorithm,
+	rawPublicKey []byte,
+) (SubjectPublicKey, error) {
+	var subPublicKey SubjectPublicKey
+	subPublicKey = SubjectPublicKey{
+		Algorithm:    algorithm,
+		CurveOID:     curveOID,
+		RawPublicKey: rawPublicKey,
 	}
+
+	err := subPublicKey.validate()
+	if err != nil {
+		return subPublicKey, fmt.Errorf("validating subject public key: %w", err)
+	}
+
+	return subPublicKey, nil
 }
 
-func (s *Subject) Validate() error {
-	if s.PublicKey.CurveOID == nil {
+func (spk *SubjectPublicKey) validate() error {
+	if spk.CurveOID == nil {
 		return fmt.Errorf("curve oid is required")
 	}
 
-	if s.PublicKey.RawPublicKey == nil {
+	if spk.RawPublicKey == nil {
 		return fmt.Errorf("raw public key is required")
 	}
 
 	// validate that curve oid forbidden
-	err := s.validateCurveOID()
+	err := spk.validateCurveOID()
 	if err != nil {
 		return fmt.Errorf("build issuer: %w", err)
 	}
 
 	// check curve oid and algo digit
-	err = s.validateCurveOIDAndAlgorithmDigit()
+	err = spk.validateCurveOIDAndAlgorithmDigit()
 	if err != nil {
 		return fmt.Errorf("build issuer: %w", err)
 	}
 
 	// check length of keys by algo digit
-	err = s.validatePublicKeyLength()
+	err = spk.validatePublicKeyLength()
 	if err != nil {
 		return fmt.Errorf("build issuer: %w", err)
 	}
@@ -100,17 +159,17 @@ func (s *Subject) Validate() error {
 	return nil
 }
 
-func (s *Subject) validateCurveOID() error {
+func (spk *SubjectPublicKey) validateCurveOID() error {
 	for _, oid := range UnavailableAlgorithms {
-		if s.PublicKey.CurveOID.Equal(oid) {
+		if spk.CurveOID.Equal(oid) {
 			return ErrForbidden
 		}
 	}
 	return nil
 }
 
-func (s *Subject) validatePublicKeyLength() error {
-	algoDigit, err := getDigitByAlgorithm(s.PublicKey.Algorithm)
+func (spk *SubjectPublicKey) validatePublicKeyLength() error {
+	algoDigit, err := getDigitByAlgorithm(spk.Algorithm)
 	if err != nil {
 		return err
 	}
@@ -122,20 +181,20 @@ func (s *Subject) validatePublicKeyLength() error {
 		wantLen = 128
 	}
 
-	if len(s.PublicKey.RawPublicKey) != wantLen {
+	if len(spk.RawPublicKey) != wantLen {
 		return ErrInvalidPublicKeyLength
 	}
 
 	return nil
 }
 
-func (s *Subject) validateCurveOIDAndAlgorithmDigit() error {
-	curveDigit, err := getDigitByCurveOID(s.PublicKey.CurveOID)
+func (spk *SubjectPublicKey) validateCurveOIDAndAlgorithmDigit() error {
+	curveDigit, err := getDigitByCurveOID(spk.CurveOID)
 	if err != nil {
 		return err
 	}
 
-	algoDigit, err := getDigitByAlgorithm(s.PublicKey.Algorithm)
+	algoDigit, err := getDigitByAlgorithm(spk.Algorithm)
 	if err != nil {
 		return err
 	}

@@ -28,30 +28,44 @@ type Issuer struct {
 	ParentCertificate *x509.Certificate
 }
 
+func CreateIssuer(
+	randReader io.Reader,
+	signer crypto.Signer,
+	signAlgorithm x509gost.GOSTAlgorithm,
+	parentCertificate *x509.Certificate,
+) (*Issuer, error) {
+	issuer := &Issuer{
+		RandReader:        randReader,
+		Signer:            signer,
+		SignAlgorithm:     signAlgorithm,
+		ParentCertificate: parentCertificate,
+	}
+
+	err := issuer.validate()
+	if err != nil {
+		return nil, fmt.Errorf("validating issuer: %w", err)
+	}
+
+	return issuer, nil
+}
+
 func (i *Issuer) GetParentCertificate() *x509.Certificate {
 	return i.ParentCertificate
 }
 
-func (i *Issuer) Validate() error {
+func (i *Issuer) validate() error {
 	if i.RandReader == nil {
-		return fmt.Errorf("build issuer: nil rand reader")
+		return fmt.Errorf("rand reader is nil")
 	}
 
 	if i.Signer == nil {
-		return fmt.Errorf("build issuer: nil signer")
+		return fmt.Errorf("signer is nil")
 	}
 
-	if err := i.validateSignAlgorithm(); err != nil {
-		return fmt.Errorf("build issuer: %w", err)
-	}
-
-	return nil
-}
-
-func (i *Issuer) validateSignAlgorithm() error {
 	// Checking using forbidden algorithm.
 	if i.SignAlgorithm == x509gost.AlgoR341001 {
 		return fmt.Errorf("use of the GOST R 34.10-2001 algorithm has been prohibited")
 	}
+
 	return nil
 }
