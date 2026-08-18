@@ -8,7 +8,6 @@ import (
 
 	"github.com/nxsgrp/gostcert/gost"
 	"github.com/nxsgrp/gostcert/internal/models"
-	"github.com/tarantool/go-gostcrypto/x509gost"
 )
 
 // IssuerOptions aggregated model of issuer options to sign certificate.
@@ -32,7 +31,7 @@ type IssuerOptions struct {
 }
 
 func (io *IssuerOptions) BuildIssuer() (*models.Issuer, error) {
-	algorithm := x509gost.GOSTAlgorithm(io.SignAlgorithm)
+	algorithm := io.SignAlgorithm.ToX509()
 
 	issuer, err := models.CreateIssuer(
 		io.RandReader,

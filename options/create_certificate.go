@@ -29,10 +29,18 @@ type CreateCertificateOptions struct {
 }
 
 func (cco *CreateCertificateOptions) BuildCertificateInformation() (*models.CertificateInformation, error) {
+	// Default NotBefore to "now" before computing NotAfter = NotBefore + TTL,
+	// otherwise an unset NotBefore (zero time) would shift NotAfter into 1970
+	// and fail validation against the defaulted NotBefore.
+	notBefore := cco.NotBefore
+	if notBefore.IsZero() {
+		notBefore = time.Now()
+	}
+
 	certInfo, err := models.CreateCertificateInformation(
 		cco.SerialNumber,
-		cco.NotBefore,
-		cco.NotBefore.Add(cco.TTL),
+		notBefore,
+		notBefore.Add(cco.TTL),
 	)
 
 	if err != nil {

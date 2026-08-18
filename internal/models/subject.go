@@ -64,8 +64,7 @@ type SubjetInformation struct {
 }
 
 func CreateSubjectInformation(commonName string, country, organization []string) (SubjetInformation, error) {
-	var subInfo SubjetInformation
-	subInfo = SubjetInformation{
+	subInfo := SubjetInformation{
 		CommonName:   commonName,
 		Country:      country,
 		Organization: organization,
@@ -114,8 +113,7 @@ func CreateSubjectPublicKey(
 	algorithm x509gost.GOSTAlgorithm,
 	rawPublicKey []byte,
 ) (SubjectPublicKey, error) {
-	var subPublicKey SubjectPublicKey
-	subPublicKey = SubjectPublicKey{
+	subPublicKey := SubjectPublicKey{
 		Algorithm:    algorithm,
 		CurveOID:     curveOID,
 		RawPublicKey: rawPublicKey,

@@ -6,7 +6,6 @@ import (
 
 	"github.com/nxsgrp/gostcert/gost"
 	"github.com/nxsgrp/gostcert/internal/models"
-	"github.com/tarantool/go-gostcrypto/x509gost"
 )
 
 // SubjectOptions aggregated model of subject options to build certificate.
@@ -40,7 +39,7 @@ type SubjectPublicKeyOptions struct {
 }
 
 func (so *SubjectOptions) BuildSubject() (*models.Subject, error) {
-	algorithm := x509gost.GOSTAlgorithm(so.PublicKeyOptions.Algorithm + 1)
+	algorithm := so.PublicKeyOptions.Algorithm.ToX509()
 
 	subjectInfo, err := models.CreateSubjectInformation(
 		so.Information.CommonName,
