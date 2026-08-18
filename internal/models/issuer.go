@@ -1,0 +1,71 @@
+package models
+
+import (
+	"crypto"
+	"crypto/x509"
+	"fmt"
+	"io"
+
+	"github.com/tarantool/go-gostcrypto/x509gost"
+)
+
+type Issuer struct {
+	// RandReader is the entropy source used during signing. Typically crypto/rand.Reader.
+	RandReader io.Reader
+
+	// Signer is the crypto.Signer that produces the GOST signature.
+	// It may wrap a software key or a hardware token (PKCS#11, Rutoken).
+	Signer crypto.Signer
+
+	// SignAlgorithm identifies the signature algorithm used to sign
+	// the TBSCertificate (e.g. AlgoR341012_256 for
+	// GOST R 34.11-2012 with GOST R 34.10-2012).
+	SignAlgorithm x509gost.GOSTAlgorithm
+
+	// ParentCertificate is the issuer certificate. When set, the issued
+	// certificate uses the parent's Subject as the Issuer field.
+	// When nil, the certificate is self-issued (Issuer = Subject).
+	ParentCertificate *x509.Certificate
+}
+
+func CreateIssuer(
+	randReader io.Reader,
+	signer crypto.Signer,
+	signAlgorithm x509gost.GOSTAlgorithm,
+	parentCertificate *x509.Certificate,
+) (*Issuer, error) {
+	issuer := &Issuer{
+		RandReader:        randReader,
+		Signer:            signer,
+		SignAlgorithm:     signAlgorithm,
+		ParentCertificate: parentCertificate,
+	}
+
+	err := issuer.validate()
+	if err != nil {
+		return nil, fmt.Errorf("validating issuer: %w", err)
+	}
+
+	return issuer, nil
+}
+
+func (i *Issuer) GetParentCertificate() *x509.Certificate {
+	return i.ParentCertificate
+}
+
+func (i *Issuer) validate() error {
+	if i.RandReader == nil {
+		return fmt.Errorf("rand reader is nil")
+	}
+
+	if i.Signer == nil {
+		return fmt.Errorf("signer is nil")
+	}
+
+	// Checking using forbidden algorithm.
+	if i.SignAlgorithm == x509gost.AlgoR341001 {
+		return fmt.Errorf("use of the GOST R 34.10-2001 algorithm has been prohibited")
+	}
+
+	return nil
+}

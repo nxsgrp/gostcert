@@ -28,3 +28,8 @@ type Certificate struct {
 func (c *Certificate) StdCertificate() *x509.Certificate {
 	return c.cert.Stdlib
 }
+
+// GetRawCertificate returns raw bytes slice of parsed GOST certificate.
+func (c *Certificate) GetRawCertificate() []byte {
+	return c.cert.Raw
+}
