@@ -9,8 +9,8 @@ import (
 )
 
 var (
-	ForbiddenError         = errors.New("the GOST R 34.10-2001 algorithm was not supported")
-	InvalidPublicKeyLength = errors.New("invalid public key length for algorithm")
+	ErrForbidden              = errors.New("the GOST R 34.10-2001 algorithm was not supported")
+	ErrInvalidPublicKeyLength = errors.New("invalid public key length for algorithm")
 
 	UnavailableAlgorithms = []asn1.ObjectIdentifier{
 		x509gost.OIDParamCryptoProA,
@@ -108,7 +108,7 @@ func (sb *SubjectBuilder) Build() (*Subject, error) {
 func (sb *SubjectBuilder) validateCurveOID() error {
 	for _, oid := range UnavailableAlgorithms {
 		if sb.subject.PublicKey.CurveOID.Equal(oid) {
-			return ForbiddenError
+			return ErrForbidden
 		}
 	}
 	return nil
@@ -128,7 +128,7 @@ func (sb *SubjectBuilder) validatePublicKeyLength() error {
 	}
 
 	if len(sb.subject.PublicKey.RawPublicKey) != wantLen {
-		return InvalidPublicKeyLength
+		return ErrInvalidPublicKeyLength
 	}
 
 	return nil
@@ -146,7 +146,7 @@ func (sb *SubjectBuilder) validateCurveOIDAndAlgorithmDigit() error {
 	}
 
 	if algoDigit != curveDigit {
-		return ForbiddenError
+		return ErrForbidden
 	}
 
 	return nil
@@ -165,16 +165,17 @@ func GetDigitByCurveOID(curveOID asn1.ObjectIdentifier) (int, error) {
 		}
 	}
 
-	return 0, ForbiddenError
+	return 0, ErrForbidden
 }
 
 func GetDigitByAlgorithm(algo x509gost.GOSTAlgorithm) (int, error) {
+	//nolint
 	switch algo {
 	case x509gost.AlgoR341012_256:
 		return 256, nil
 	case x509gost.AlgoR341012_512:
 		return 512, nil
 	default:
-		return 0, ForbiddenError
+		return 0, ErrForbidden
 	}
 }

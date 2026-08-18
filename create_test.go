@@ -70,6 +70,7 @@ func TestCreateCertificate_SelfSigned(t *testing.T) {
 	assert.Equal(t, cert.cert.SigGOSTAlgo, x509gost.AlgoR341012_256, "expected AlgoR341012_256 signature algorithm")
 
 	// Verify via x509gost
+	//nolint
 	//chains, err := cert.cert.Verify(x509gost.VerifyOptions{
 	//	GOSTRoots: []*x509gost.Certificate{cert.cert},
 	//})
@@ -96,7 +97,7 @@ func generateEphemeralKey(curveOID asn1.ObjectIdentifier) ([]byte, []byte, error
 
 	privRaw, pubRaw, err := gostcrypto.GenerateEphemeralKey(curveObject, rand.Reader)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to generate private key: %v", err)
+		return nil, nil, fmt.Errorf("failed to generate private key: %w", err)
 	}
 
 	return pubRaw, privRaw, nil

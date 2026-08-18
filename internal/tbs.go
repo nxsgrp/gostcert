@@ -56,6 +56,7 @@ func BuildTBSCertificate(
 		issuerDER = subjectDER
 	}
 
+	//nolint
 	//issuerDER := issuer.GetParentCertificate().RawSubject
 	if len(issuerDER) == 0 {
 		issuerDER, err = asn1.Marshal(issuer.GetParentCertificate().Subject.ToRDNSequence())

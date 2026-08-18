@@ -17,11 +17,15 @@ func TestBuildExtensions(t *testing.T) {
 	})
 
 	t.Run("non-empty round-trips", func(t *testing.T) {
-		in := []pkix.Extension{
-			{Id: asn1.ObjectIdentifier{2, 5, 29, 19}, Critical: true, Value: []byte{0x30, 0x00}},
+		extensions := []pkix.Extension{
+			{
+				Id:       asn1.ObjectIdentifier{2, 5, 29, 19},
+				Critical: true,
+				Value:    []byte{0x30, 0x00},
+			},
 		}
 
-		der, err := BuildExtensions(in)
+		der, err := BuildExtensions(extensions)
 		require.NoError(t, err)
 		assert.NotEmpty(t, der)
 
@@ -36,9 +40,9 @@ func TestBuildExtensions(t *testing.T) {
 		var got []pkix.Extension
 		_, err = asn1.Unmarshal(raw.Bytes, &got)
 		require.NoError(t, err)
-		assert.Len(t, got, len(in))
-		assert.Equal(t, in[0].Id, got[0].Id)
-		assert.Equal(t, in[0].Critical, got[0].Critical)
-		assert.Equal(t, in[0].Value, got[0].Value)
+		assert.Len(t, got, len(extensions))
+		assert.Equal(t, extensions[0].Id, got[0].Id)
+		assert.Equal(t, extensions[0].Critical, got[0].Critical)
+		assert.Equal(t, extensions[0].Value, got[0].Value)
 	})
 }

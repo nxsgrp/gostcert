@@ -52,6 +52,7 @@ func CreateCertificate(opts *options.CreateCertificateOptions) (*Certificate, er
 
 	// TODO: will be implemented to another MR.
 	// Extensions (optional [3] EXPLICIT).
+	//nolint
 	//template := opts.BuildTemplateCertificate()
 	//extDER, err := internal.BuildExtensions(nil)
 	//if err != nil {

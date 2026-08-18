@@ -12,14 +12,16 @@ import (
 	"github.com/tarantool/go-gostcrypto/x509gost"
 )
 
+const ()
+
 // newTestPublicKey generates a fresh GOST public key on the CryptoPro-A curve
 // (the same curve used across the certificate tests).
-func newTestPublicKey(t *testing.T) (curveOID asn1.ObjectIdentifier, pubRaw []byte) {
+func newTestPublicKey(t *testing.T) (asn1.ObjectIdentifier, []byte) {
 	t.Helper()
-	curveOID = x509gost.OIDParamCryptoProA
+	curveOID := x509gost.OIDParamCryptoProA
 	curve, err := gost.CurveByOID(curveOID)
 	require.NoError(t, err)
-	_, pubRaw, err = gost.GenerateEphemeralKey(curve, rand.Reader)
+	_, pubRaw, err := gost.GenerateEphemeralKey(curve, rand.Reader)
 	require.NoError(t, err)
 	require.NotEmpty(t, pubRaw, "generated public key must not be empty")
 	return curveOID, pubRaw
@@ -74,17 +76,16 @@ func TestBuildSignatureAlgorithm(t *testing.T) {
 
 func TestGostAlgorithmToOID(t *testing.T) {
 	cases := []struct {
-		name string
 		algo x509gost.GOSTAlgorithm
 		want asn1.ObjectIdentifier
 	}{
-		{"r341001", x509gost.AlgoR341001, x509gost.OIDPublicKeyGOSTR341001},
-		{"streebog256", x509gost.AlgoR341012_256, x509gost.OIDPublicKeyGOSTR341012_256},
-		{"streebog512", x509gost.AlgoR341012_512, x509gost.OIDPublicKeyGOSTR341012_512},
+		{x509gost.AlgoR341001, x509gost.OIDPublicKeyGOSTR341001},
+		{x509gost.AlgoR341012_256, x509gost.OIDPublicKeyGOSTR341012_256},
+		{x509gost.AlgoR341012_512, x509gost.OIDPublicKeyGOSTR341012_512},
 	}
 
 	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
+		t.Run(tc.algo.String(), func(t *testing.T) {
 			got, err := OIDPublicKeyByGostAlgorithm(tc.algo)
 			require.NoError(t, err)
 			assert.Equal(t, tc.want, got)
@@ -97,17 +98,16 @@ func TestGostAlgorithmToOID(t *testing.T) {
 
 func TestGostSignatureAlgorithmToOID(t *testing.T) {
 	cases := []struct {
-		name string
 		algo x509gost.GOSTAlgorithm
 		want asn1.ObjectIdentifier
 	}{
-		{"r341001", x509gost.AlgoR341001, x509gost.OIDSignatureGOSTR341001},
-		{"streebog256", x509gost.AlgoR341012_256, x509gost.OIDSignatureGOSTR341012_256},
-		{"streebog512", x509gost.AlgoR341012_512, x509gost.OIDSignatureGOSTR341012_512},
+		{x509gost.AlgoR341001, x509gost.OIDSignatureGOSTR341001},
+		{x509gost.AlgoR341012_256, x509gost.OIDSignatureGOSTR341012_256},
+		{x509gost.AlgoR341012_512, x509gost.OIDSignatureGOSTR341012_512},
 	}
 
 	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
+		t.Run(tc.algo.String(), func(t *testing.T) {
 			got, err := OIDSignatureAlgorithmByGostAlgorithm(tc.algo)
 			require.NoError(t, err)
 			assert.Equal(t, tc.want, got)
@@ -120,17 +120,16 @@ func TestGostSignatureAlgorithmToOID(t *testing.T) {
 
 func TestGostDigestAlgorithmToOID(t *testing.T) {
 	cases := []struct {
-		name string
 		algo x509gost.GOSTAlgorithm
 		want asn1.ObjectIdentifier
 	}{
-		{"r341001", x509gost.AlgoR341001, x509gost.OIDHashGOSTR341194},
-		{"streebog256", x509gost.AlgoR341012_256, x509gost.OIDHashStreebog256},
-		{"streebog512", x509gost.AlgoR341012_512, x509gost.OIDHashStreebog512},
+		{x509gost.AlgoR341001, x509gost.OIDHashGOSTR341194},
+		{x509gost.AlgoR341012_256, x509gost.OIDHashStreebog256},
+		{x509gost.AlgoR341012_512, x509gost.OIDHashStreebog512},
 	}
 
 	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
+		t.Run(tc.algo.String(), func(t *testing.T) {
 			got, err := GostDigestAlgorithmToOID(tc.algo)
 			require.NoError(t, err)
 			assert.Equal(t, tc.want, got)
@@ -167,15 +166,15 @@ func TestGostDigestFromCurveOID(t *testing.T) {
 		{"512 test", oidParamTC26_512Test, nil},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := GostDigestFromCurveOID(tt.curve, x509gost.AlgoR341012_256)
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			got, err := GostDigestFromCurveOID(testCase.curve, x509gost.AlgoR341012_256)
 			require.NoError(t, err)
 
-			if tt.want == nil {
+			if testCase.want == nil {
 				assert.Nil(t, got, "digestParamSet should be omitted (nil)")
 			} else {
-				assert.Equal(t, tt.want, got, "digestParamSet OID mismatch")
+				assert.Equal(t, testCase.want, got, "digestParamSet OID mismatch")
 			}
 		})
 	}

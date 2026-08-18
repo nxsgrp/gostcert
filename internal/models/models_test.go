@@ -12,6 +12,7 @@ import (
 )
 
 func TestSubjectBuilder(t *testing.T) {
+	//nolint
 	subject, err := NewSubjectBuilder().
 		WithCommonName("Test CN").
 		WithCountry([]string{"RU"}).
@@ -136,7 +137,7 @@ func TestSubjectBuilderDigitMismatch(t *testing.T) {
 			subject, err := buildSubject(tt.curve, tt.algo, tt.pub)
 			require.Error(t, err)
 			require.Nil(t, subject)
-			require.ErrorIs(t, err, ForbiddenError)
+			require.ErrorIs(t, err, ErrForbidden)
 		})
 	}
 }
@@ -162,7 +163,7 @@ func TestSubjectBuilderKeyLengthMismatch(t *testing.T) {
 			subject, err := buildSubject(tt.curve, tt.algo, tt.pub)
 			require.Error(t, err)
 			require.Nil(t, subject)
-			require.ErrorIs(t, err, InvalidPublicKeyLength)
+			require.ErrorIs(t, err, ErrInvalidPublicKeyLength)
 		})
 	}
 }
@@ -175,5 +176,5 @@ func TestSubjectBuilderUnknownCurve(t *testing.T) {
 	subject, err := buildSubject(unknown, x509gost.AlgoR341012_256, keyLen(64))
 	require.Error(t, err)
 	require.Nil(t, subject)
-	require.ErrorIs(t, err, ForbiddenError)
+	require.ErrorIs(t, err, ErrForbidden)
 }

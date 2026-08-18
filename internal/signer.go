@@ -35,12 +35,12 @@ type Signer struct {
 func BuildSigner(curveOID asn1.ObjectIdentifier, rawPrivateKey []byte) (*Signer, error) {
 	curveObject, err := gostcrypto.CurveByOID(curveOID)
 	if err != nil {
-		return nil, fmt.Errorf("error building curve object: %v", err)
+		return nil, fmt.Errorf("error building curve object: %w", err)
 	}
 
 	rawPublicKey, err := gostcrypto.PublicKeyRawFromPrivate(curveObject, rawPrivateKey)
 	if err != nil {
-		return nil, fmt.Errorf("error building raw public key: %v", err)
+		return nil, fmt.Errorf("error building raw public key: %w", err)
 	}
 
 	signer := &Signer{
@@ -70,7 +70,7 @@ func (s *Signer) Public() crypto.PublicKey {
 func (s *Signer) Sign(r io.Reader, digest []byte, _ crypto.SignerOpts) ([]byte, error) {
 	signDigest, err := gostcrypto.SignDigestOnCurve(s.curve, s.rawPrivateKey, digest, r)
 	if err != nil {
-		return nil, fmt.Errorf("error signing digest: %v", err)
+		return nil, fmt.Errorf("error signing digest: %w", err)
 	}
 
 	return signDigest, nil

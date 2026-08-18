@@ -48,17 +48,18 @@ var hashKATs = []struct {
 }
 
 func TestHashForGOST(t *testing.T) {
-	for _, tc := range hashKATs {
-		t.Run(tc.name, func(t *testing.T) {
-			digestLE, err := HashForGOST(tc.algo, tc.in)
+	for _, testCase := range hashKATs {
+		t.Run(testCase.name, func(t *testing.T) {
+			digestLE, err := HashForGOST(testCase.algo, testCase.in)
 			require.NoError(t, err)
-			assert.Len(t, digestLE, tc.size, "digest length must match the algorithm")
+			assert.Len(t, digestLE, testCase.size, "digest length must match the algorithm")
 
 			// HashForGOST returns the digest as a little-endian integer
 			// ("alpha" in GOST R 34.10), so reversing it must yield the
 			// canonical big-endian known-answer value.
-			wantBE := mustHex(t, tc.wantBE)
-			assert.Equal(t, wantBE, reverseBytes(digestLE), "little-endian digest must be the byte-reverse of the big-endian KAT")
+			wantBE := mustHex(t, testCase.wantBE)
+			digestBE := reverseBytes(digestLE)
+			assert.Equal(t, wantBE, digestBE, "digest must be big-endian")
 		})
 	}
 }

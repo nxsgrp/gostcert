@@ -25,7 +25,8 @@ const (
 	tc26_256Scalar      = "3464E17D244BECFDE1C99D13FF03B93635BAEFD3EC5A3283E798EEAF86AC210D"
 
 	tc26_512DerFilePath = "resources/gost-certs/ref_tc26_512a.der"
-	tc26_512Scalar      = "418740B6F8667BAE35A567D7DD504F844545B1F51A91899B195AADF74D9FB8D30DC87C0109957E150F1EE53404E36DEA569F2440383C75D917F56E1BDC29F549"
+	//nolint
+	tc26_512Scalar = "418740B6F8667BAE35A567D7DD504F844545B1F51A91899B195AADF74D9FB8D30DC87C0109957E150F1EE53404E36DEA569F2440383C75D917F56E1BDC29F549"
 )
 
 var ossReferenceCases = []ossReferenceCase{
@@ -86,9 +87,9 @@ type certParts struct {
 }
 
 func TestCreateCertificate_ReproducesOpenSSL(t *testing.T) {
-	for _, tc := range ossReferenceCases {
-		t.Run(tc.name, func(t *testing.T) {
-			der, err := os.ReadFile(tc.derPath)
+	for _, referCase := range ossReferenceCases {
+		t.Run(referCase.name, func(t *testing.T) {
+			der, err := os.ReadFile(referCase.derPath)
 			require.NoError(t, err, "read reference certificate")
 
 			ref, err := gostcert.ParseCertificate(der)
@@ -100,8 +101,8 @@ func TestCreateCertificate_ReproducesOpenSSL(t *testing.T) {
 
 			// Rebuild the same key and sign with the identical parameters that
 			// OpenSSL used to produce the reference.
-			scalar := revBytes(mustHexString(t, tc.scalar))
-			signer, err := internal.BuildSigner(tc.curve, scalar)
+			scalar := revBytes(mustHexString(t, referCase.scalar))
+			signer, err := internal.BuildSigner(referCase.curve, scalar)
 			require.NoError(t, err, "build signer failed")
 
 			opts := &options.CreateCertificateOptions{
@@ -115,15 +116,15 @@ func TestCreateCertificate_ReproducesOpenSSL(t *testing.T) {
 						Organization: std.Subject.Organization,
 					},
 					PublicKeyOptions: options.SubjectPublicKeyOptions{
-						CurveOID:     tc.curve,
-						Algorithm:    tc.algo,
+						CurveOID:     referCase.curve,
+						Algorithm:    referCase.algo,
 						RawPublicKey: signer.Public().([]byte),
 					},
 				},
 				Issuer: options.IssuerOptions{
 					RandReader:    rand.Reader,
 					Signer:        signer,
-					SignAlgorithm: tc.algo,
+					SignAlgorithm: referCase.algo,
 				},
 			}
 
@@ -180,13 +181,13 @@ func TestCreateCertificate_ReproducesOpenSSL(t *testing.T) {
 			// 4) The randomized signatures are not byte-equal, but both are
 			// valid over their own TBS with the same public key, and carry the
 			// expected length.
-			assert.Len(t, ourParts.Sig, tc.sigLen, "signature length must match the algorithm")
-			curve, err := gostcrypto.CurveByOID(tc.curve)
+			assert.Len(t, ourParts.Sig, referCase.sigLen, "signature length must match the algorithm")
+			curve, err := gostcrypto.CurveByOID(referCase.curve)
 			require.NoError(t, err)
 			pubRaw := signer.Public().([]byte)
 
 			for label, parts := range map[string]certParts{"reference": refParts, "ours": ourParts} {
-				digest, err := internal.HashForGOST(x509gost.GOSTAlgorithm(tc.algo), parts.TBS)
+				digest, err := internal.HashForGOST(x509gost.GOSTAlgorithm(referCase.algo), parts.TBS)
 				require.NoError(t, err, "%s: hash TBS", label)
 				ok, err := gostcrypto.VerifyDigestOnCurve(curve, pubRaw, digest, parts.Sig)
 				require.NoError(t, err, "%s: verify signature", label)
@@ -298,8 +299,8 @@ func TestOpenSSL_ParsesOurCertificate(t *testing.T) {
 		t.Skip("no OpenSSL 3 with GOST support found (skipped)")
 	}
 
-	tc := ossReferenceCases[0] // 256-bit
-	der, err := os.ReadFile(tc.derPath)
+	referCase := ossReferenceCases[0] // 256-bit
+	der, err := os.ReadFile(referCase.derPath)
 	require.NoError(t, err, "read reference certificate")
 
 	ref, err := gostcert.ParseCertificate(der)
@@ -309,8 +310,8 @@ func TestOpenSSL_ParsesOurCertificate(t *testing.T) {
 	notBefore := std.NotBefore.UTC()
 	notAfter := std.NotAfter.UTC()
 
-	scalar := revBytes(mustHexString(t, tc.scalar))
-	signer, err := internal.BuildSigner(tc.curve, scalar)
+	scalar := revBytes(mustHexString(t, referCase.scalar))
+	signer, err := internal.BuildSigner(referCase.curve, scalar)
 	require.NoError(t, err, "build signer failed")
 
 	opts := &options.CreateCertificateOptions{
@@ -324,15 +325,15 @@ func TestOpenSSL_ParsesOurCertificate(t *testing.T) {
 				Organization: std.Subject.Organization,
 			},
 			PublicKeyOptions: options.SubjectPublicKeyOptions{
-				CurveOID:     tc.curve,
-				Algorithm:    tc.algo,
+				CurveOID:     referCase.curve,
+				Algorithm:    referCase.algo,
 				RawPublicKey: signer.Public().([]byte),
 			},
 		},
 		Issuer: options.IssuerOptions{
 			RandReader:    rand.Reader,
 			Signer:        signer,
-			SignAlgorithm: tc.algo,
+			SignAlgorithm: referCase.algo,
 		},
 	}
 
@@ -345,7 +346,7 @@ func TestOpenSSL_ParsesOurCertificate(t *testing.T) {
 	confPath, err := filepath.Abs("test/resources/openssl/openssl-gost.conf")
 	require.NoError(t, err)
 
-	cmd := exec.Command(ossBin, "x509", "-in", certPath, "-inform", "DER", "-noout", "-subject")
+	cmd := exec.CommandContext(t.Context(), ossBin, "x509", "-in", certPath, "-inform", "DER", "-noout", "-subject")
 	cmd.Env = append(os.Environ(), "OPENSSL_CONF="+confPath)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -360,6 +361,7 @@ func TestOpenSSL_ParsesOurCertificate(t *testing.T) {
 // GOSTCERT_OPENSSL to point at another build.
 func gostOpenSSLBinary() (string, bool) {
 	if p := os.Getenv("GOSTCERT_OPENSSL"); p != "" {
+		//nolint
 		if _, err := os.Stat(p); err == nil {
 			return p, true
 		}
