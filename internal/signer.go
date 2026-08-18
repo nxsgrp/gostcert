@@ -18,6 +18,9 @@ type Signer struct {
 	// rawPrivateKey is the raw GOST private key bytes (little-endian scalar).
 	rawPrivateKey []byte
 
+	// rawPublicKey is the raw GOST public key bytes.
+	rawPublicKey []byte
+
 	// curveOID is the ASN.1 OID identifying the elliptic curve parameter set
 	// (e.g. id-GostR3410-2001-CryptoPro-A-ParamSet).
 	curveOID asn1.ObjectIdentifier
@@ -35,10 +38,16 @@ func BuildSigner(curveOID asn1.ObjectIdentifier, rawPrivateKey []byte) (*Signer,
 		return nil, fmt.Errorf("error building curve object: %v", err)
 	}
 
+	rawPublicKey, err := gostcrypto.PublicKeyRawFromPrivate(curveObject, rawPrivateKey)
+	if err != nil {
+		return nil, fmt.Errorf("error building raw public key: %v", err)
+	}
+
 	signer := &Signer{
-		rawPrivateKey: rawPrivateKey,
 		curveOID:      curveOID,
 		curve:         curveObject,
+		rawPrivateKey: rawPrivateKey,
+		rawPublicKey:  rawPublicKey,
 	}
 
 	return signer, nil
@@ -49,9 +58,7 @@ func BuildSigner(curveOID asn1.ObjectIdentifier, rawPrivateKey []byte) (*Signer,
 // The returned value is LE(X) || LE(Y) — the concatenation of the X and Y
 // coordinates in little-endian byte order, matching the GOST representation.
 func (s *Signer) Public() crypto.PublicKey {
-	// TODO: How throw error?
-	rawPublicKey, _ := gostcrypto.PublicKeyRawFromPrivate(s.curve, s.rawPrivateKey)
-	return rawPublicKey
+	return s.rawPublicKey
 }
 
 // Sign signs the given digest (already hashed and converted to little-endian
