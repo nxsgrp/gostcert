@@ -42,15 +42,20 @@ type SubjectPublicKeyOptions struct {
 func (so *SubjectOptions) BuildSubject() (*models.Subject, error) {
 	algorithm := x509gost.GOSTAlgorithm(so.PublicKeyOptions.Algorithm)
 
-	subject, err := models.NewSubjectBuilder().
-		WithCommonName(so.Information.CommonName).
-		WithCountry(so.Information.Country).
-		WithOrganization(so.Information.Organization).
-		WithCurveOID(so.PublicKeyOptions.CurveOID).
-		WithPublicKey(so.PublicKeyOptions.RawPublicKey).
-		WithAlgorithm(algorithm).
-		Build()
+	subject := &models.Subject{
+		Information: models.SubjetInformation{
+			CommonName:   so.Information.CommonName,
+			Country:      so.Information.Country,
+			Organization: so.Information.Organization,
+		},
+		PublicKey: models.SubjectPublicKey{
+			Algorithm:    algorithm,
+			CurveOID:     so.PublicKeyOptions.CurveOID,
+			RawPublicKey: so.PublicKeyOptions.RawPublicKey,
+		},
+	}
 
+	err := subject.Validate()
 	if err != nil {
 		return nil, fmt.Errorf("build subject from options: %w", err)
 	}

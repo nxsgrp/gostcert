@@ -34,13 +34,14 @@ type IssuerOptions struct {
 func (io *IssuerOptions) BuildIssuer() (*models.Issuer, error) {
 	algorithm := x509gost.GOSTAlgorithm(io.SignAlgorithm)
 
-	issuer, err := models.NewIssuerBuilder().
-		WithParentCertificate(io.ParentCertificate).
-		WithRandReader(io.RandReader).
-		WithSignAlgorithm(algorithm).
-		WithSigner(io.Signer).
-		Build()
+	issuer := &models.Issuer{
+		RandReader:        io.RandReader,
+		Signer:            io.Signer,
+		SignAlgorithm:     algorithm,
+		ParentCertificate: io.ParentCertificate,
+	}
 
+	err := issuer.Validate()
 	if err != nil {
 		return nil, fmt.Errorf("build issuer from options: %w", err)
 	}

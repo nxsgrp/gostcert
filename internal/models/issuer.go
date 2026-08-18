@@ -3,6 +3,7 @@ package models
 import (
 	"crypto"
 	"crypto/x509"
+	"fmt"
 	"io"
 
 	"github.com/tarantool/go-gostcrypto/x509gost"
@@ -29,4 +30,28 @@ type Issuer struct {
 
 func (i *Issuer) GetParentCertificate() *x509.Certificate {
 	return i.ParentCertificate
+}
+
+func (i *Issuer) Validate() error {
+	if i.RandReader == nil {
+		return fmt.Errorf("build issuer: nil rand reader")
+	}
+
+	if i.Signer == nil {
+		return fmt.Errorf("build issuer: nil signer")
+	}
+
+	if err := i.validateSignAlgorithm(); err != nil {
+		return fmt.Errorf("build issuer: %w", err)
+	}
+
+	return nil
+}
+
+func (i *Issuer) validateSignAlgorithm() error {
+	// Checking using forbidden algorithm.
+	if i.SignAlgorithm == x509gost.AlgoR341001 {
+		return fmt.Errorf("use of the GOST R 34.10-2001 algorithm has been prohibited")
+	}
+	return nil
 }

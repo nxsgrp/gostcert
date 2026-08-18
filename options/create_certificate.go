@@ -29,12 +29,13 @@ type CreateCertificateOptions struct {
 }
 
 func (cco *CreateCertificateOptions) BuildCertificateInformation() (*models.CertificateInformation, error) {
-	certInfo, err := models.NewCertificateInformationBuilder().
-		WithSerialNumber(cco.SerialNumber).
-		WithNotBefore(cco.NotBefore).
-		WithTTL(cco.TTL).
-		Build()
+	certInfo := &models.CertificateInformation{
+		SerialNumber: cco.SerialNumber,
+		NotBefore:    cco.NotBefore,
+		NotAfter:     cco.NotBefore.Add(cco.TTL),
+	}
 
+	err := certInfo.Validate()
 	if err != nil {
 		return nil, fmt.Errorf("failed to build certificate information: %w", err)
 	}

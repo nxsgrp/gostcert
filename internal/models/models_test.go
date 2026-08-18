@@ -11,37 +11,52 @@ import (
 	"github.com/tarantool/go-gostcrypto/x509gost"
 )
 
+const (
+	testCommonName   = "Test CN"
+	testCountry      = "RU"
+	testOrganization = "Test"
+)
+
 func TestSubjectBuilder(t *testing.T) {
-	//nolint
-	subject, err := NewSubjectBuilder().
-		WithCommonName("Test CN").
-		WithCountry([]string{"RU"}).
-		WithOrganization([]string{"Test"}).
-		WithCurveOID(x509gost.OIDParamTC26_256A).
-		WithAlgorithm(x509gost.AlgoR341012_256).
-		WithPublicKey(keyLen(64)).
-		Build()
+	subject := Subject{
+		Information: SubjetInformation{
+			CommonName:   testCommonName,
+			Country:      []string{testCountry},
+			Organization: []string{testOrganization},
+		},
+		PublicKey: SubjectPublicKey{
+			Algorithm:    x509gost.AlgoR341012_256,
+			CurveOID:     x509gost.OIDParamTC26_256A,
+			RawPublicKey: keyLen(64),
+		},
+	}
+
+	err := subject.Validate()
 	require.NoError(t, err)
 
 	name := subject.GetPkixName()
-	assert.Equal(t, "Test CN", name.CommonName)
-	assert.Equal(t, []string{"RU"}, name.Country)
-	assert.Equal(t, []string{"Test"}, name.Organization)
+	assert.Equal(t, testCommonName, name.CommonName)
+	assert.Equal(t, []string{testCountry}, name.Country)
+	assert.Equal(t, []string{testOrganization}, name.Organization)
 
-	assert.Equal(t, "Test CN", subject.Information.CommonName)
-	assert.Equal(t, []string{"RU"}, subject.Information.Country)
-	assert.Equal(t, []string{"Test"}, subject.Information.Organization)
+	assert.Equal(t, testCommonName, subject.Information.CommonName)
+	assert.Equal(t, []string{testCountry}, subject.Information.Country)
+	assert.Equal(t, []string{testOrganization}, subject.Information.Organization)
 	assert.Equal(t, x509gost.OIDParamTC26_256A, subject.PublicKey.CurveOID)
 	assert.Equal(t, x509gost.AlgoR341012_256, subject.PublicKey.Algorithm)
 	assert.Equal(t, keyLen(64), subject.PublicKey.RawPublicKey)
 }
 
 func TestSubjectBuilderWithEmptyPublicKey(t *testing.T) {
-	subject, err := NewSubjectBuilder().
-		WithCommonName("Test CN").
-		WithCountry([]string{"RU"}).
-		WithOrganization([]string{"Test"}).
-		Build()
+	subject := Subject{
+		Information: SubjetInformation{
+			CommonName:   testCommonName,
+			Country:      []string{testCountry},
+			Organization: []string{testOrganization},
+		},
+	}
+
+	err := subject.Validate()
 	require.Error(t, err)
 	require.Nil(t, subject)
 }
@@ -60,61 +75,53 @@ func TestIssuerGetParentCertificate(t *testing.T) {
 }
 
 func TestSubjectBuilderWithForbiddenAlgorithm(t *testing.T) {
-	subject, err := NewSubjectBuilder().
-		WithCommonName("Test CN").
-		WithCountry([]string{"RU"}).
-		WithOrganization([]string{"Test"}).
-		WithCurveOID(x509gost.OIDParamTC26_256A).
-		WithAlgorithm(x509gost.AlgoR341001).
-		WithPublicKey([]byte{0x01, 0x02, 0x03}).
-		Build()
+	subject := Subject{
+		Information: SubjetInformation{
+			CommonName:   testCommonName,
+			Country:      []string{testCountry},
+			Organization: []string{testOrganization},
+		},
+		PublicKey: SubjectPublicKey{
+			Algorithm:    x509gost.AlgoR341001,
+			CurveOID:     x509gost.OIDParamTC26_256A,
+			RawPublicKey: []byte{0x01, 0x02, 0x03},
+		},
+	}
 
+	err := subject.Validate()
 	require.Error(t, err)
 	require.Nil(t, subject)
 }
 
 func TestSubjectBuilderWithForbiddenCurve(t *testing.T) {
-	subject, err := NewSubjectBuilder().
-		WithCommonName("Test CN").
-		WithCountry([]string{"RU"}).
-		WithOrganization([]string{"Test"}).
-		WithCurveOID(x509gost.OIDParamCryptoProA).
-		WithAlgorithm(x509gost.AlgoR341012_256).
-		WithPublicKey([]byte{0x01, 0x02, 0x03}).
-		Build()
+	subject := Subject{
+		Information: SubjetInformation{
+			CommonName:   testCommonName,
+			Country:      []string{testCountry},
+			Organization: []string{testOrganization},
+		},
+		PublicKey: SubjectPublicKey{
+			Algorithm:    x509gost.AlgoR341012_256,
+			CurveOID:     x509gost.OIDParamCryptoProA,
+			RawPublicKey: []byte{0x01, 0x02, 0x03},
+		},
+	}
 
+	err := subject.Validate()
 	require.Error(t, err)
 	require.Nil(t, subject)
 }
 
-// buildSubject is a helper that constructs a Subject with the given curve OID,
-// algorithm and raw public key (lengths are chosen by the caller so the key
-// length / digit validations can be exercised independently).
-func buildSubject(curveOID asn1.ObjectIdentifier, algo x509gost.GOSTAlgorithm, pubKey []byte) (*Subject, error) {
-	return NewSubjectBuilder().
-		WithCommonName("Test CN").
-		WithCountry([]string{"RU"}).
-		WithOrganization([]string{"Test"}).
-		WithCurveOID(curveOID).
-		WithAlgorithm(algo).
-		WithPublicKey(pubKey).
-		Build()
-}
-
-// keyLen returns a pubkey of exactly n bytes so key-length validation can be
-// triggered with a precise value.
-func keyLen(n int) []byte {
-	return make([]byte, n)
-}
-
 func TestSubjectBuilderValid256(t *testing.T) {
-	subject, err := buildSubject(x509gost.OIDParamTC26_256A, x509gost.AlgoR341012_256, keyLen(64))
+	subject := buildSubject(x509gost.OIDParamTC26_256A, x509gost.AlgoR341012_256, keyLen(64))
+	err := subject.Validate()
 	require.NoError(t, err)
 	require.NotNil(t, subject)
 }
 
 func TestSubjectBuilderValid512(t *testing.T) {
-	subject, err := buildSubject(x509gost.OIDParamTC26_512A, x509gost.AlgoR341012_512, keyLen(128))
+	subject := buildSubject(x509gost.OIDParamTC26_512A, x509gost.AlgoR341012_512, keyLen(128))
+	err := subject.Validate()
 	require.NoError(t, err)
 	require.NotNil(t, subject)
 }
@@ -134,7 +141,8 @@ func TestSubjectBuilderDigitMismatch(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			subject, err := buildSubject(tt.curve, tt.algo, tt.pub)
+			subject := buildSubject(tt.curve, tt.algo, tt.pub)
+			err := subject.Validate()
 			require.Error(t, err)
 			require.Nil(t, subject)
 			require.ErrorIs(t, err, ErrForbidden)
@@ -160,7 +168,8 @@ func TestSubjectBuilderKeyLengthMismatch(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			subject, err := buildSubject(tt.curve, tt.algo, tt.pub)
+			subject := buildSubject(tt.curve, tt.algo, tt.pub)
+			err := subject.Validate()
 			require.Error(t, err)
 			require.Nil(t, subject)
 			require.ErrorIs(t, err, ErrInvalidPublicKeyLength)
@@ -173,8 +182,33 @@ func TestSubjectBuilderKeyLengthMismatch(t *testing.T) {
 func TestSubjectBuilderUnknownCurve(t *testing.T) {
 	unknown := asn1.ObjectIdentifier{1, 2, 3, 4, 5}
 
-	subject, err := buildSubject(unknown, x509gost.AlgoR341012_256, keyLen(64))
+	subject := buildSubject(unknown, x509gost.AlgoR341012_256, keyLen(64))
+	err := subject.Validate()
 	require.Error(t, err)
 	require.Nil(t, subject)
 	require.ErrorIs(t, err, ErrForbidden)
+}
+
+// keyLen returns a pubkey of exactly n bytes so key-length validation can be
+// triggered with a precise value.
+func keyLen(n int) []byte {
+	return make([]byte, n)
+}
+
+// buildSubject is a helper that constructs a Subject with the given curve OID,
+// algorithm and raw public key (lengths are chosen by the caller so the key
+// length / digit validations can be exercised independently).
+func buildSubject(curveOID asn1.ObjectIdentifier, algo x509gost.GOSTAlgorithm, pubKey []byte) *Subject {
+	return &Subject{
+		Information: SubjetInformation{
+			CommonName:   testCommonName,
+			Country:      []string{testCountry},
+			Organization: []string{testOrganization},
+		},
+		PublicKey: SubjectPublicKey{
+			Algorithm:    algo,
+			CurveOID:     curveOID,
+			RawPublicKey: pubKey,
+		},
+	}
 }
