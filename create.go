@@ -1,7 +1,6 @@
 package gostcert
 
 import (
-	"encoding/asn1"
 	"fmt"
 
 	"github.com/nxsgrp/gostcert/internal"
@@ -24,15 +23,23 @@ import (
 // result in the SignedCertificate SEQUENCE, and re-parses the DER output
 // through ParseCertificate before returning.
 func CreateCertificate(opts *options.CreateCertificateOptions) (*Certificate, error) {
-	template := opts.BuildTemplateCertificate()
+	issuer, err := opts.Issuer.BuildIssuer()
+	if err != nil {
+		return nil, fmt.Errorf("CreateCertificate: %w", err)
+	}
 
-	parentCert := template
-	if opts.ParentCertificate != nil {
-		parentCert = opts.ParentCertificate
+	subject, err := opts.Subject.BuildSubject()
+	if err != nil {
+		return nil, fmt.Errorf("CreateCertificate: %w", err)
+	}
+
+	certInfo, err := opts.BuildCertificateInformation()
+	if err != nil {
+		return nil, fmt.Errorf("CreateCertificate: %w", err)
 	}
 
 	// Create sig DER algorithm
-	sigAlgoDER, err := internal.BuildSignatureAlgorithm(opts.Crypto.SignAlgorithm)
+	sigAlgoDER, err := internal.BuildSignatureAlgorithm(issuer.SignAlgorithm)
 	if err != nil {
 		return nil, fmt.Errorf("CreateCertificate: build sig algo: %w", err)
 	}
@@ -41,67 +48,51 @@ func CreateCertificate(opts *options.CreateCertificateOptions) (*Certificate, er
 	template.ExtraExtensions = internal.BuildExtraExtensions(opts, parentCert)
 
 	// Create TBS Certificate raw body by concatenation
-	tbsBody, err := internal.BuildTBSCertificate(opts, template, parentCert, sigAlgoDER)
+	tbsBody, err := internal.BuildTBSCertificate(certInfo, subject, issuer, sigAlgoDER)
 	if err != nil {
 		return nil, fmt.Errorf("CreateCertificate: build tbs certificate: %w", err)
 	}
 
+	// TODO: will be implemented to another MR.
 	// Extensions (optional [3] EXPLICIT).
-	extDER, err := internal.BuildExtensions(template.ExtraExtensions)
-	if err != nil {
-		return nil, fmt.Errorf("CreateCertificate: %w", err)
-	}
-	if len(extDER) > 0 {
-		tbsBody = append(tbsBody, extDER...)
-	}
+	//nolint
+	//template := opts.BuildTemplateCertificate()
+	//extDER, err := internal.BuildExtensions(nil)
+	//if err != nil {
+	//	return nil, fmt.Errorf("CreateCertificate: %w", err)
+	//}
+	//if len(extDER) > 0 {
+	//	tbsBody = append(tbsBody, extDER...)
+	//}
 
-	tbsRawValue := asn1.RawValue{
-		Class:      asn1.ClassUniversal,
-		Tag:        asn1.TagSequence,
-		IsCompound: true,
-		Bytes:      tbsBody,
-	}
-
-	tbsDER, err := asn1.Marshal(tbsRawValue)
+	tbsDER, err := internal.BuildTBSCertificateRawValue(tbsBody)
 	if err != nil {
-		return nil, fmt.Errorf("CreateCertificate: marshal TBS: %w", err)
+		return nil, fmt.Errorf("CreateCertificate: build tbs raw value: %w", err)
 	}
 
 	// Sign temp certificate
-	digestLE, err := internal.HashForGOST(opts.Crypto.SignAlgorithm, tbsDER)
+	digestLE, err := internal.HashForGOST(issuer.SignAlgorithm, tbsDER)
 	if err != nil {
 		return nil, fmt.Errorf("CreateCertificate: hash: %w", err)
 	}
 
-	sig, err := opts.Crypto.Signer.Sign(opts.Crypto.RandReader, digestLE, nil)
+	sig, err := issuer.Signer.Sign(issuer.RandReader, digestLE, nil)
 	if err != nil {
 		return nil, fmt.Errorf("CreateCertificate: sign: %w", err)
 	}
 
 	// Building final certificate
-	sigBitString := asn1.BitString{
-		Bytes:     sig,
-		BitLength: len(sig) * 8,
-	}
-
-	sigBitDER, err := asn1.Marshal(sigBitString)
+	sigBitDER, err := internal.BuildSigBitString(sig)
 	if err != nil {
-		return nil, fmt.Errorf("CreateCertificate: marshal signature: %w", err)
+		return nil, fmt.Errorf("CreateCertificate: build sig bit string: %w", err)
 	}
 
 	certBody := internal.ConcatBytes(tbsDER, sigAlgoDER)
 	certBody = append(certBody, sigBitDER...)
 
-	certRawValue := asn1.RawValue{
-		Class:      asn1.ClassUniversal,
-		Tag:        asn1.TagSequence,
-		IsCompound: true,
-		Bytes:      certBody,
-	}
-
-	certDER, err := asn1.Marshal(certRawValue)
+	certDER, err := internal.BuildSigCertificateRawValue(certBody)
 	if err != nil {
-		return nil, fmt.Errorf("CreateCertificate: marshal cert: %w", err)
+		return nil, fmt.Errorf("CreateCertificate: marshal sig cert: %w", err)
 	}
 
 	cert, err := ParseCertificate(certDER)

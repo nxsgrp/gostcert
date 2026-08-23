@@ -3,9 +3,10 @@ package internal
 import (
 	"crypto"
 	"encoding/asn1"
+	"fmt"
 	"io"
 
-	gost "github.com/tarantool/go-gostcrypto"
+	"github.com/tarantool/go-gostcrypto"
 )
 
 // Signer implements crypto.Signer for GOST private keys.
@@ -14,11 +15,42 @@ import (
 // OID so that the standard crypto.Signer interface can be used for GOST
 // signing operations.
 type Signer struct {
-	// RawPrivateKey is the raw GOST private key bytes (little-endian scalar).
-	RawPrivateKey []byte
-	// CurveOID is the ASN.1 OID identifying the elliptic curve parameter set
+	// rawPrivateKey is the raw GOST private key bytes (little-endian scalar).
+	rawPrivateKey []byte
+
+	// rawPublicKey is the raw GOST public key bytes.
+	rawPublicKey []byte
+
+	// curveOID is the ASN.1 OID identifying the elliptic curve parameter set
 	// (e.g. id-GostR3410-2001-CryptoPro-A-ParamSet).
-	CurveOID asn1.ObjectIdentifier
+	curveOID asn1.ObjectIdentifier
+
+	// curve is the gostcrypt parsed curve oid.
+	curve *gostcrypto.Curve
+}
+
+// BuildSigner the base constructor of Signer structure that provides necessary ability
+// to wrap CurveOID to gostcrypt Curve object for further PublicKey generation with
+// error throwing.
+func BuildSigner(curveOID asn1.ObjectIdentifier, rawPrivateKey []byte) (*Signer, error) {
+	curveObject, err := gostcrypto.CurveByOID(curveOID)
+	if err != nil {
+		return nil, fmt.Errorf("error building curve object: %w", err)
+	}
+
+	rawPublicKey, err := gostcrypto.PublicKeyRawFromPrivate(curveObject, rawPrivateKey)
+	if err != nil {
+		return nil, fmt.Errorf("error building raw public key: %w", err)
+	}
+
+	signer := &Signer{
+		curveOID:      curveOID,
+		curve:         curveObject,
+		rawPrivateKey: rawPrivateKey,
+		rawPublicKey:  rawPublicKey,
+	}
+
+	return signer, nil
 }
 
 // Public returns the raw GOST public key bytes derived from the private key.
@@ -26,10 +58,7 @@ type Signer struct {
 // The returned value is LE(X) || LE(Y) — the concatenation of the X and Y
 // coordinates in little-endian byte order, matching the GOST representation.
 func (s *Signer) Public() crypto.PublicKey {
-	// TODO: how pass errors and satisfy crypto.PublicKey iface?
-	gostCurveOID, _ := gost.CurveByOID(s.CurveOID)
-	rawPublicKey, _ := gost.PublicKeyRawFromPrivate(gostCurveOID, s.RawPrivateKey)
-	return rawPublicKey
+	return s.rawPublicKey
 }
 
 // Sign signs the given digest (already hashed and converted to little-endian
@@ -39,9 +68,10 @@ func (s *Signer) Public() crypto.PublicKey {
 // The opts parameter is ignored; GOST signatures do not use the standard
 // crypto.SignerOpts mechanism.
 func (s *Signer) Sign(r io.Reader, digest []byte, _ crypto.SignerOpts) ([]byte, error) {
-	curve, err := gost.CurveByOID(s.CurveOID)
+	signDigest, err := gostcrypto.SignDigestOnCurve(s.curve, s.rawPrivateKey, digest, r)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error signing digest: %w", err)
 	}
-	return gost.SignDigestOnCurve(curve, s.RawPrivateKey, digest, r)
+
+	return signDigest, nil
 }
