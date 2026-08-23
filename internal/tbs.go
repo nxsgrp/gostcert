@@ -9,13 +9,12 @@ import (
 )
 
 // derEncodedAlgorithmIdentifier is an ASN.1 container for the signature
-// AlgorithmIdentifier. It carries the algorithm OID plus a NULL Parameters
-// field, matching the encoding produced by OpenSSL for GOST signature
-// algorithms (RFC 5280 §4.1.1.2 requires the parameters to be present and be
-// NULL for most algorithms).
+// AlgorithmIdentifier. It carries only the algorithm OID: per RFC 9215 §2 the
+// parameters field MUST be omitted for the GOST R 34.10-2012 signature
+// algorithm (unlike the legacy OpenSSL GOST encoding, which emits a NULL
+// Parameters element).
 type derEncodedAlgorithmIdentifier struct {
 	AlgorithmIdentifier asn1.ObjectIdentifier
-	Parameters          asn1.RawValue `asn1:"optional"`
 }
 
 // validatedDER is an ASN.1 container for the Validity SEQUENCE

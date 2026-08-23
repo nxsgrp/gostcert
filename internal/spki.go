@@ -86,8 +86,9 @@ func BuildSPKI(subjectPublicKey models.SubjectPublicKey) ([]byte, error) {
 // BuildSignatureAlgorithm builds a DER-encoded AlgorithmIdentifier for the
 // GOST signature algorithm.
 //
-// The signature AlgorithmIdentifier carries the algorithm OID and a NULL
-// Parameters field (RFC 5280 §4.1.1.2), matching OpenSSL's GOST encoding.
+// Per RFC 9215 §2 the signature AlgorithmIdentifier MUST omit the parameters
+// field (unlike the legacy OpenSSL GOST encoding, which emits a NULL
+// Parameters element).
 func BuildSignatureAlgorithm(sigAlgorithm x509gost.GOSTAlgorithm) ([]byte, error) {
 	sigOID, err := OIDSignatureAlgorithmByGostAlgorithm(sigAlgorithm)
 	if err != nil {
@@ -96,7 +97,6 @@ func BuildSignatureAlgorithm(sigAlgorithm x509gost.GOSTAlgorithm) ([]byte, error
 
 	data, err := asn1.Marshal(derEncodedAlgorithmIdentifier{
 		AlgorithmIdentifier: sigOID,
-		Parameters:          asn1.NullRawValue,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("buildSignatureAlgorithm: marshal identifier: %w", err)

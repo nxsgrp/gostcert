@@ -145,6 +145,14 @@ func TestCreateCertificate_ReproducesOpenSSL(t *testing.T) {
 			require.Equal(t, len(refFields), len(ourFields), "TBS fields count must match")
 
 			for i := 0; i < len(refFields)-1; i++ {
+				// Field index 2 is TBSCertificate.signature, the signature
+				// AlgorithmIdentifier. OpenSSL emits a NULL parameters element
+				// there; we deliberately omit it per RFC 9215 §2, so this field
+				// is compared structurally in step 3 below.
+				if i == 2 {
+					continue
+				}
+
 				assert.Equalf(t, refFields[i], ourFields[i], "TBS field %d must match", i)
 			}
 
@@ -175,8 +183,17 @@ func TestCreateCertificate_ReproducesOpenSSL(t *testing.T) {
 			require.NotEmpty(t, ourParams)
 			assert.Equal(t, refParams[0], ourParams[0], "SPKI curve OID parameter-set must be equal")
 
-			// 3) Signature algorithm identifiers must match.
-			assert.Equal(t, refParts.SigAlgo, ourParts.SigAlgo, "signature algo must be equal")
+			// 3) Signature algorithm identifiers. The OID must match the
+			// reference; the reference (OpenSSL's GOST engine) appends a NULL
+			// Parameters element what we deliberately omit per RFC 9215 §2
+			// ("the encoding MUST omit the parameters field") — the same
+			// RFC-over-OpenSSL choice made for digestParamSet above. So the OID
+			// is compared byte-for-byte and our AlgorithmIdentifier is asserted
+			// to carry no parameters element.
+			refSigAlg := splitSequence(t, refParts.SigAlgo)
+			ourSigAlg := splitSequence(t, ourParts.SigAlgo)
+			require.Len(t, ourSigAlg, 1, "our signature AlgorithmIdentifier must carry only the OID (RFC 9215 §2)")
+			assert.Equal(t, refSigAlg[0], ourSigAlg[0], "signature algorithm OID must be equal")
 
 			// 4) The randomized signatures are not byte-equal, but both are
 			// valid over their own TBS with the same public key, and carry the
