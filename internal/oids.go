@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"crypto/x509"
 	"encoding/asn1"
 
 	"github.com/tarantool/go-gostcrypto/x509gost"
@@ -30,6 +31,58 @@ var (
 // oidCountryName is id-at-countryName (2.5.4.6), the one RDN attribute that
 // OpenSSL leaves as PrintableString instead of UTF8String.
 var oidCountryName = asn1.ObjectIdentifier{2, 5, 4, 6}
+
+// Standard X.509v3 extension OIDs.
+var (
+	oidSubjectKeyIdentifier   = asn1.ObjectIdentifier{2, 5, 29, 14}
+	oidAuthorityKeyIdentifier = asn1.ObjectIdentifier{2, 5, 29, 35}
+	oidBasicConstraints       = asn1.ObjectIdentifier{2, 5, 29, 19}
+	oidKeyUsage               = asn1.ObjectIdentifier{2, 5, 29, 15}
+)
+
+var (
+	declaredLeastKeysUsage = []declaredKeyUsage{
+		{
+			keyUsage: x509.KeyUsageDigitalSignature,
+			value:    0x80,
+		},
+		{
+			keyUsage: x509.KeyUsageContentCommitment,
+			value:    0x40,
+		},
+		{
+			keyUsage: x509.KeyUsageKeyEncipherment,
+			value:    0x20,
+		},
+		{
+			keyUsage: x509.KeyUsageDataEncipherment,
+			value:    0x10,
+		},
+		{
+			keyUsage: x509.KeyUsageKeyAgreement,
+			value:    0x08,
+		},
+		{
+			keyUsage: x509.KeyUsageCertSign,
+			value:    0x04,
+		},
+		{
+			keyUsage: x509.KeyUsageCRLSign,
+			value:    0x02,
+		},
+	}
+
+	declaredMostKeysUsage = []declaredKeyUsage{
+		{
+			keyUsage: x509.KeyUsageEncipherOnly,
+			value:    0x80,
+		},
+		{
+			keyUsage: x509.KeyUsageDecipherOnly,
+			value:    0x40,
+		},
+	}
+)
 
 // cryptoPro2001ParamSets lists the GOST R 34.10-2001 public key parameter sets
 // for which §4.2 requires digestParamSet to be present and equal to

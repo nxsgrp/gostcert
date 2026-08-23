@@ -1,6 +1,8 @@
 package options
 
 import (
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"fmt"
 	"math/big"
 	"time"
@@ -26,6 +28,26 @@ type CreateCertificateOptions struct {
 
 	// IssuerOptions is the necessary issuer options to sign certificate.
 	Issuer IssuerOptions
+
+	// IsCA enables the CA flag in the BasicConstraints extension.
+	// When true, the certificate can sign other certificates.
+	IsCA bool
+
+	// PathLenConstraint sets the path length constraint for CA certificates.
+	// nil means no constraint; 0 means only leaf certificates;
+	// 1 means one level of intermediate CA, etc.
+	// Only meaningful when IsCA is true.
+	PathLenConstraint *int
+
+	// KeyUsage specifies the permitted key usages as a bitmask
+	// (RFC 5280, section 4.2.1.3). When non-zero, a critical KeyUsage
+	// extension is emitted. When zero, no KeyUsage extension is written.
+	KeyUsage x509.KeyUsage
+
+	// ExtraExtensions are additional X.509v3 extensions appended verbatim to
+	// the certificate, typically for CryptoPro OIDs (49.3, 49.4). Each entry
+	// keeps its own Critical flag from pkix.Extension.
+	ExtraExtensions []pkix.Extension
 }
 
 func (cco *CreateCertificateOptions) BuildCertificateInformation() (*models.CertificateInformation, error) {

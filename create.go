@@ -1,9 +1,11 @@
 package gostcert
 
 import (
+	"crypto/x509/pkix"
 	"fmt"
 
 	"github.com/nxsgrp/gostcert/internal"
+	"github.com/nxsgrp/gostcert/internal/models"
 	"github.com/nxsgrp/gostcert/options"
 )
 
@@ -44,26 +46,26 @@ func CreateCertificate(opts *options.CreateCertificateOptions) (*Certificate, er
 		return nil, fmt.Errorf("CreateCertificate: build sig algo: %w", err)
 	}
 
-	// Build standard X.509v3 extensions.
-	template.ExtraExtensions = internal.BuildExtraExtensions(opts, parentCert)
-
 	// Create TBS Certificate raw body by concatenation
 	tbsBody, err := internal.BuildTBSCertificate(certInfo, subject, issuer, sigAlgoDER)
 	if err != nil {
 		return nil, fmt.Errorf("CreateCertificate: build tbs certificate: %w", err)
 	}
 
-	// TODO: will be implemented to another MR.
-	// Extensions (optional [3] EXPLICIT).
-	//nolint
-	//template := opts.BuildTemplateCertificate()
-	//extDER, err := internal.BuildExtensions(nil)
-	//if err != nil {
-	//	return nil, fmt.Errorf("CreateCertificate: %w", err)
-	//}
-	//if len(extDER) > 0 {
-	//	tbsBody = append(tbsBody, extDER...)
-	//}
+	// Build standard X.509v3 extensions and append them to the TBS body as
+	// the optional [3] EXPLICIT Extensions field (RFC 5280, section 4.1.2.9).
+	extensions, err := buildStandardExtensions(opts, subject, issuer)
+	if err != nil {
+		return nil, fmt.Errorf("CreateCertificate: build standard extensions: %w", err)
+	}
+
+	extDER, err := internal.BuildExtensions(extensions)
+	if err != nil {
+		return nil, fmt.Errorf("CreateCertificate: build extensions: %w", err)
+	}
+	if len(extDER) > 0 {
+		tbsBody = append(tbsBody, extDER...)
+	}
 
 	tbsDER, err := internal.BuildTBSCertificateRawValue(tbsBody)
 	if err != nil {
@@ -101,4 +103,67 @@ func CreateCertificate(opts *options.CreateCertificateOptions) (*Certificate, er
 	}
 
 	return cert, nil
+}
+
+// buildStandardExtensions assembles the X.509v3 extensions for a GOST
+// certificate:
+//
+//   - BasicConstraints — CA flag and optional pathLenConstraint
+//   - SubjectKeyIdentifier — Streebog-256 digest of the raw subject public key
+//   - AuthorityKeyIdentifier — the parent's SubjectKeyIdentifier, or the
+//     subject's own SKI for self-issued certificates
+//   - KeyUsage — emitted only when opts.KeyUsage is non-zero
+//   - ExtraExtensions — appended verbatim
+func buildStandardExtensions(
+	opts *options.CreateCertificateOptions,
+	subject *models.Subject,
+	issuer *models.Issuer,
+) ([]pkix.Extension, error) {
+	var exts []pkix.Extension
+
+	// 1. BasicConstraints.
+	basicConstraitExt, err := internal.BuildBasicConstraintsExtension(opts.IsCA, opts.PathLenConstraint)
+	if err != nil {
+		return nil, fmt.Errorf("buildBasicConstraintsExtension: %w", err)
+	}
+	exts = append(exts, basicConstraitExt)
+
+	// 2. SubjectKeyIdentifier = Streebog-256 of the raw subject public key.
+	skiDigest, err := internal.Streebog256(subject.PublicKey.RawPublicKey)
+	if err != nil {
+		return nil, fmt.Errorf("buildStandardExtensions: %w", err)
+	}
+
+	subjectKeyExt, err := internal.BuildSubjectKeyIdentifierExtension(skiDigest)
+	if err != nil {
+		return nil, fmt.Errorf("buildStandardExtensions: %w", err)
+	}
+	exts = append(exts, subjectKeyExt)
+
+	// 3. AuthorityKeyIdentifier: the parent's SKI when a parent is present,
+	// otherwise the subject's own SKI (self-issued certificate).
+	akiKeyID := skiDigest
+	if parent := issuer.GetParentCertificate(); parent != nil && len(parent.SubjectKeyId) > 0 {
+		akiKeyID = parent.SubjectKeyId
+	}
+
+	authKeyExt, err := internal.BuildAuthorityKeyIdentifierExtension(akiKeyID)
+	if err != nil {
+		return nil, fmt.Errorf("buildStandardExtensions: %w", err)
+	}
+	exts = append(exts, authKeyExt)
+
+	// 4. KeyUsage (critical), only when explicitly requested.
+	kuExt, err := internal.BuildKeyUsageExtension(opts.KeyUsage)
+	if err != nil {
+		return nil, fmt.Errorf("buildStandardExtensions: %w", err)
+	}
+	if opts.KeyUsage != 0 {
+		exts = append(exts, kuExt)
+	}
+
+	// 5. Extra extensions appended verbatim.
+	exts = append(exts, opts.ExtraExtensions...)
+
+	return exts, nil
 }

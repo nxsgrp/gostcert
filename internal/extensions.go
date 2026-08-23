@@ -1,10 +1,16 @@
 package internal
 
 import (
+	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/asn1"
 	"fmt"
 )
+
+type declaredKeyUsage struct {
+	keyUsage x509.KeyUsage
+	value    byte
+}
 
 // ASN.1 structures for extension content encoding.
 
@@ -22,37 +28,29 @@ type authKeyID struct {
 	KeyID []byte `asn1:"tag:0,optional"`
 }
 
-// Standard X.509v3 extension OIDs.
-var (
-	oidSubjectKeyIdentifier   = asn1.ObjectIdentifier{2, 5, 29, 14}
-	oidAuthorityKeyIdentifier = asn1.ObjectIdentifier{2, 5, 29, 35}
-	oidBasicConstraints       = asn1.ObjectIdentifier{2, 5, 29, 19}
-	oidKeyUsage               = asn1.ObjectIdentifier{2, 5, 29, 15}
-)
-
 // BuildSubjectKeyIdentifierExtension builds a SubjectKeyIdentifier extension
 // with the given key identifier bytes.
 //
 // keyID should be the 160-bit (20-byte) SHA-1 hash of the public key.
 // Per RFC 5280, section 4.2.1.2, SubjectKeyIdentifier ::= KeyIdentifier
 // which is an OCTET STRING wrapped in an outer OCTET STRING (the extnValue).
-func BuildSubjectKeyIdentifierExtension(keyID []byte) pkix.Extension {
-	// SubjectKeyIdentifier ::= KeyIdentifier (OCTET STRING)
+func BuildSubjectKeyIdentifierExtension(keyID []byte) (pkix.Extension, error) {
+	var pkixExtension pkix.Extension
+
+	// SubjectKeyIdentifier ::= KeyIdentifier (OCTET STRING).
+	// The Value carried in pkix.Extension is this single DER element; the
+	// surrounding extnValue OCTET STRING is added when the Extension is encoded.
 	content, err := asn1.Marshal(keyID)
 	if err != nil {
-		panic("BuildSubjectKeyIdentifierExtension: " + err.Error())
+		return pkixExtension, fmt.Errorf("BuildSubjectKeyIdentifierExtension: %w", err)
 	}
 
-	// Wrap in an OCTET STRING to form the extnValue.
-	value, err := asn1.Marshal(content)
-	if err != nil {
-		panic("BuildSubjectKeyIdentifierExtension: " + err.Error())
-	}
-
-	return pkix.Extension{
+	pkixExtension = pkix.Extension{
 		Id:    oidSubjectKeyIdentifier,
-		Value: value,
+		Value: content,
 	}
+
+	return pkixExtension, nil
 }
 
 // BuildAuthorityKeyIdentifierExtension builds an AuthorityKeyIdentifier
@@ -62,29 +60,29 @@ func BuildSubjectKeyIdentifierExtension(keyID []byte) pkix.Extension {
 // Per RFC 5280, section 4.2.1.1, the keyIdentifier is an OCTET STRING
 // carried in an implicit [0] tag inside a SEQUENCE, then wrapped in
 // an OCTET STRING (the extnValue).
-func BuildAuthorityKeyIdentifierExtension(keyID []byte) pkix.Extension {
+func BuildAuthorityKeyIdentifierExtension(keyID []byte) (pkix.Extension, error) {
+	var pkixExtension pkix.Extension
+
 	aki := authKeyID{KeyID: keyID}
 	content, err := asn1.Marshal(aki)
 	if err != nil {
-		panic("BuildAuthorityKeyIdentifierExtension: " + err.Error())
+		return pkixExtension, fmt.Errorf("BuildAuthorityKeyIdentifierExtension: %w", err)
 	}
 
-	// Wrap the SEQUENCE content in an OCTET STRING (extnValue).
-	value, err := asn1.Marshal(content)
-	if err != nil {
-		panic("BuildAuthorityKeyIdentifierExtension: " + err.Error())
-	}
-
-	return pkix.Extension{
+	pkixExtension = pkix.Extension{
 		Id:    oidAuthorityKeyIdentifier,
-		Value: value,
+		Value: content,
 	}
+
+	return pkixExtension, nil
 }
 
 // BuildBasicConstraintsExtension builds a BasicConstraints extension.
 // When pathLen is nil, pathLenConstraint is omitted from the ASN.1.
 // When pathLen is 0, pathLenConstraint=0 is encoded (leaf-only).
-func BuildBasicConstraintsExtension(isCA bool, pathLen *int) pkix.Extension {
+func BuildBasicConstraintsExtension(isCA bool, pathLen *int) (pkix.Extension, error) {
+	var pkixExtension pkix.Extension
+
 	bc := basicConstraints{IsCA: isCA, PathLen: -1}
 	if pathLen != nil {
 		bc.PathLen = *pathLen
@@ -92,80 +90,99 @@ func BuildBasicConstraintsExtension(isCA bool, pathLen *int) pkix.Extension {
 
 	content, err := asn1.Marshal(bc)
 	if err != nil {
-		panic("BuildBasicConstraintsExtension: " + err.Error())
+		return pkixExtension, fmt.Errorf("BuildBasicConstraintsExtension: %w", err)
 	}
 
-	value, err := asn1.Marshal(content)
-	if err != nil {
-		panic("BuildBasicConstraintsExtension: " + err.Error())
-	}
-
-	return pkix.Extension{
+	pkixExtension = pkix.Extension{
 		Id:       oidBasicConstraints,
 		Critical: true,
-		Value:    value,
+		Value:    content,
 	}
+
+	return pkixExtension, nil
 }
 
 // BuildKeyUsageExtension builds a KeyUsage extension from a x509.KeyUsage bitmask.
 // OID 2.5.29.15, marked critical per RFC 5280.
-func BuildKeyUsageExtension(ku x509.KeyUsage) pkix.Extension {
+func BuildKeyUsageExtension(keyUsage x509.KeyUsage) (pkix.Extension, error) {
+	var pkixExtension pkix.Extension
+
 	var kuBytes [2]byte
 	var kuBitLen int
 
-	if ku&x509.KeyUsageDigitalSignature != 0 {
-		kuBytes[0] |= 0x80
-		kuBitLen = 1
+	// most significant bits
+	for index, ku := range declaredLeastKeysUsage {
+		if keyUsage&ku.keyUsage != 0 {
+			kuBytes[0] |= ku.value
+			kuBitLen = index + 1
+		}
 	}
-	if ku&x509.KeyUsageContentCommitment != 0 {
-		kuBytes[0] |= 0x40
-		kuBitLen = 2
+
+	// least significant bits
+	for index, ku := range declaredMostKeysUsage {
+		if keyUsage&ku.keyUsage != 0 {
+			kuBytes[0] |= ku.value
+			kuBitLen = index + 1
+		}
 	}
-	if ku&x509.KeyUsageKeyEncipherment != 0 {
-		kuBytes[0] |= 0x20
-		kuBitLen = 3
-	}
-	if ku&x509.KeyUsageDataEncipherment != 0 {
-		kuBytes[0] |= 0x10
-		kuBitLen = 4
-	}
-	if ku&x509.KeyUsageKeyAgreement != 0 {
-		kuBytes[0] |= 0x08
-		kuBitLen = 5
-	}
-	if ku&x509.KeyUsageCertSign != 0 {
-		kuBytes[0] |= 0x04
-		kuBitLen = 6
-	}
-	if ku&x509.KeyUsageCRLSign != 0 {
-		kuBytes[0] |= 0x02
-		kuBitLen = 7
-	}
-	if ku&x509.KeyUsageEncipherOnly != 0 {
-		kuBytes[1] |= 0x80
-		kuBitLen = 8
-	}
-	if ku&x509.KeyUsageDecipherOnly != 0 {
-		kuBytes[1] |= 0x40
-		kuBitLen = 9
-	}
+
+	//if keyUsage&x509.KeyUsageDigitalSignature != 0 {
+	//	kuBytes[0] |= 0x80
+	//	kuBitLen = 1
+	//}
+	//
+	//if keyUsage&x509.KeyUsageContentCommitment != 0 {
+	//	kuBytes[0] |= 0x40
+	//	kuBitLen = 2
+	//}
+	//
+	//if keyUsage&x509.KeyUsageKeyEncipherment != 0 {
+	//	kuBytes[0] |= 0x20
+	//	kuBitLen = 3
+	//}
+	//
+	//if keyUsage&x509.KeyUsageDataEncipherment != 0 {
+	//	kuBytes[0] |= 0x10
+	//	kuBitLen = 4
+	//}
+	//
+	//if keyUsage&x509.KeyUsageKeyAgreement != 0 {
+	//	kuBytes[0] |= 0x08
+	//	kuBitLen = 5
+	//}
+	//
+	//if keyUsage&x509.KeyUsageCertSign != 0 {
+	//	kuBytes[0] |= 0x04
+	//	kuBitLen = 6
+	//}
+	//
+	//if keyUsage&x509.KeyUsageCRLSign != 0 {
+	//	kuBytes[0] |= 0x02
+	//	kuBitLen = 7
+	//}
+	//
+	//if keyUsage&x509.KeyUsageEncipherOnly != 0 {
+	//	kuBytes[1] |= 0x80
+	//	kuBitLen = 8
+	//}
+	//if keyUsage&x509.KeyUsageDecipherOnly != 0 {
+	//	kuBytes[1] |= 0x40
+	//	kuBitLen = 9
+	//}
 
 	bitString := asn1.BitString{Bytes: kuBytes[:], BitLength: kuBitLen}
 	content, err := asn1.Marshal(bitString)
 	if err != nil {
-		panic("BuildKeyUsageExtension: " + err.Error())
+		return pkixExtension, fmt.Errorf("BuildKeyUsageExtension: %w", err)
 	}
 
-	value, err := asn1.Marshal(content)
-	if err != nil {
-		panic("BuildKeyUsageExtension: " + err.Error())
-	}
-
-	return pkix.Extension{
+	pkixExtension = pkix.Extension{
 		Id:       oidKeyUsage,
 		Critical: true,
-		Value:    value,
+		Value:    content,
 	}
+
+	return pkixExtension, nil
 }
 
 // BuildExtensions serializes a slice of pkix.Extension into the DER-encoded

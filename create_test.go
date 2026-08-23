@@ -2,6 +2,8 @@ package gostcert
 
 import (
 	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/asn1"
 	"fmt"
 	"math/big"
@@ -12,9 +14,13 @@ import (
 	"github.com/nxsgrp/gostcert/internal"
 	"github.com/nxsgrp/gostcert/options"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/tarantool/go-gostcrypto"
 	"github.com/tarantool/go-gostcrypto/x509gost"
 )
+
+// testOrganization is the Organization attribute used by every test subject.
+const testOrganization = "Test"
 
 func TestCreateCertificate_SelfSigned(t *testing.T) {
 	// Generate a random 20-byte serial number (matching OpenSSL convention).
@@ -42,7 +48,7 @@ func TestCreateCertificate_SelfSigned(t *testing.T) {
 			Information: options.SubjetInformationOptions{
 				CommonName:   "GOST R 34.10-2012 Test Certificate",
 				Country:      []string{"RU"},
-				Organization: []string{"Test"},
+				Organization: []string{testOrganization},
 			},
 			PublicKeyOptions: options.SubjectPublicKeyOptions{
 				CurveOID:     curveOID,
@@ -104,43 +110,52 @@ func generateEphemeralKey(curveOID asn1.ObjectIdentifier) ([]byte, []byte, error
 }
 
 func TestCreateCertificate_Chain_RootIntermediateLeaf(t *testing.T) {
-	curveOID := x509gost.OIDParamCryptoProA
-	curve, err := gost.CurveByOID(curveOID)
+	curveOID := x509gost.OIDParamTC26_256A
+	curve, err := gostcrypto.CurveByOID(curveOID)
 	require.NoError(t, err)
 
 	// ── Generate keypairs for root, intermediate, leaf ──
-	rootPriv, rootPub, err := gost.GenerateEphemeralKey(curve, rand.Reader)
+	rootPriv, rootPub, err := gostcrypto.GenerateEphemeralKey(curve, rand.Reader)
 	require.NoError(t, err)
 
-	intermPriv, intermPub, err := gost.GenerateEphemeralKey(curve, rand.Reader)
+	intermPriv, intermPub, err := gostcrypto.GenerateEphemeralKey(curve, rand.Reader)
 	require.NoError(t, err)
 
-	leafPriv, leafPub, err := gost.GenerateEphemeralKey(curve, rand.Reader)
+	_, leafPub, err := gostcrypto.GenerateEphemeralKey(curve, rand.Reader)
+	require.NoError(t, err)
+
+	rootSigner, err := internal.BuildSigner(curveOID, rootPriv)
+	require.NoError(t, err)
+
+	intermSigner, err := internal.BuildSigner(curveOID, intermPriv)
 	require.NoError(t, err)
 
 	// ── 1. Create Root CA (self-signed, CA=true, pathLen=1) ──
-	rootSerial := big.NewInt(1)
 	pathLen1 := 1
 
 	rootOpts := &options.CreateCertificateOptions{
-		SerialNumber: rootSerial,
-		Subject: options.SubjectOptions{
-			CommonName: "GOST Root CA",
-			Country:    []string{"RU"},
-		},
+		SerialNumber:      big.NewInt(1),
+		TTL:               365 * 24 * time.Hour,
 		IsCA:              true,
 		PathLenConstraint: &pathLen1,
 		KeyUsage:          x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
-		Crypto: options.CryptoOptions{
-			CurveOID:      curveOID,
-			Signer:        &internal.Signer{RawPrivateKey: rootPriv, CurveOID: curveOID},
-			RandReader:    rand.Reader,
-			Algorithm:     x509gost.AlgoR341012_256,
-			SignAlgorithm: x509gost.AlgoR341012_256,
+		Subject: options.SubjectOptions{
+			Information: options.SubjetInformationOptions{
+				CommonName:   "GOST Root CA",
+				Country:      []string{"RU"},
+				Organization: []string{testOrganization},
+			},
+			PublicKeyOptions: options.SubjectPublicKeyOptions{
+				CurveOID:     curveOID,
+				Algorithm:    gost.AlgoR341012_256,
+				RawPublicKey: rootPub,
+			},
 		},
-		RawPrivateKey: rootPriv,
-		RawPublicKey:  rootPub,
-		TTL:           365 * 24 * time.Hour,
+		Issuer: options.IssuerOptions{
+			RandReader:    rand.Reader,
+			Signer:        rootSigner,
+			SignAlgorithm: gost.AlgoR341012_256,
+		},
 	}
 
 	rootCert, err := CreateCertificate(rootOpts)
@@ -156,29 +171,32 @@ func TestCreateCertificate_Chain_RootIntermediateLeaf(t *testing.T) {
 	t.Logf("Root CA SubjectKeyId: %x", rootCert.StdCertificate().SubjectKeyId)
 
 	// ── 2. Create Intermediate CA (parent=root, CA=true, pathLen=0) ──
-	intermSerial := big.NewInt(2)
 	pathLen0 := 0
 
 	intermOpts := &options.CreateCertificateOptions{
-		SerialNumber: intermSerial,
-		Subject: options.SubjectOptions{
-			CommonName: "GOST Intermediate CA",
-			Country:    []string{"RU"},
-		},
+		SerialNumber:      big.NewInt(2),
+		TTL:               365 * 24 * time.Hour,
 		IsCA:              true,
 		PathLenConstraint: &pathLen0,
 		KeyUsage:          x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
-		ParentCertificate: rootCert.StdCertificate(),
-		Crypto: options.CryptoOptions{
-			CurveOID:      curveOID,
-			Signer:        &internal.Signer{RawPrivateKey: rootPriv, CurveOID: curveOID},
-			RandReader:    rand.Reader,
-			Algorithm:     x509gost.AlgoR341012_256,
-			SignAlgorithm: x509gost.AlgoR341012_256,
+		Subject: options.SubjectOptions{
+			Information: options.SubjetInformationOptions{
+				CommonName:   "GOST Intermediate CA",
+				Country:      []string{"RU"},
+				Organization: []string{testOrganization},
+			},
+			PublicKeyOptions: options.SubjectPublicKeyOptions{
+				CurveOID:     curveOID,
+				Algorithm:    gost.AlgoR341012_256,
+				RawPublicKey: intermPub,
+			},
 		},
-		RawPrivateKey: intermPriv,
-		RawPublicKey:  intermPub,
-		TTL:           365 * 24 * time.Hour,
+		Issuer: options.IssuerOptions{
+			RandReader:        rand.Reader,
+			Signer:            rootSigner, // root signs the intermediate
+			SignAlgorithm:     gost.AlgoR341012_256,
+			ParentCertificate: rootCert.StdCertificate(),
+		},
 	}
 
 	intermCert, err := CreateCertificate(intermOpts)
@@ -194,27 +212,29 @@ func TestCreateCertificate_Chain_RootIntermediateLeaf(t *testing.T) {
 		"intermediate AKI should match root SKI")
 
 	// ── 3. Create Leaf (parent=intermediate, CA=false) ──
-	leafSerial := big.NewInt(3)
-
 	leafOpts := &options.CreateCertificateOptions{
-		SerialNumber: leafSerial,
+		SerialNumber: big.NewInt(3),
+		TTL:          365 * 24 * time.Hour,
+		IsCA:         false,
+		KeyUsage:     x509.KeyUsageDigitalSignature,
 		Subject: options.SubjectOptions{
-			CommonName: "GOST Leaf Certificate",
-			Country:    []string{"RU"},
+			Information: options.SubjetInformationOptions{
+				CommonName:   "GOST Leaf Certificate",
+				Country:      []string{"RU"},
+				Organization: []string{testOrganization},
+			},
+			PublicKeyOptions: options.SubjectPublicKeyOptions{
+				CurveOID:     curveOID,
+				Algorithm:    gost.AlgoR341012_256,
+				RawPublicKey: leafPub,
+			},
 		},
-		IsCA:              false,
-		KeyUsage:          x509.KeyUsageDigitalSignature,
-		ParentCertificate: intermCert.StdCertificate(),
-		Crypto: options.CryptoOptions{
-			CurveOID:      curveOID,
-			Signer:        &internal.Signer{RawPrivateKey: intermPriv, CurveOID: curveOID},
-			RandReader:    rand.Reader,
-			Algorithm:     x509gost.AlgoR341012_256,
-			SignAlgorithm: x509gost.AlgoR341012_256,
+		Issuer: options.IssuerOptions{
+			RandReader:        rand.Reader,
+			Signer:            intermSigner, // intermediate signs the leaf
+			SignAlgorithm:     gost.AlgoR341012_256,
+			ParentCertificate: intermCert.StdCertificate(),
 		},
-		RawPrivateKey: leafPriv,
-		RawPublicKey:  leafPub,
-		TTL:           365 * 24 * time.Hour,
 	}
 
 	leafCert, err := CreateCertificate(leafOpts)
@@ -253,11 +273,14 @@ func TestCreateCertificate_Chain_RootIntermediateLeaf(t *testing.T) {
 }
 
 func TestCreateCertificate_WithExtraExtensions(t *testing.T) {
-	curveOID := x509gost.OIDParamCryptoProA
-	curve, err := gost.CurveByOID(curveOID)
+	curveOID := x509gost.OIDParamTC26_256A
+	curve, err := gostcrypto.CurveByOID(curveOID)
 	require.NoError(t, err)
 
-	priv, pub, err := gost.GenerateEphemeralKey(curve, rand.Reader)
+	priv, pub, err := gostcrypto.GenerateEphemeralKey(curve, rand.Reader)
+	require.NoError(t, err)
+
+	signer, err := internal.BuildSigner(curveOID, priv)
 	require.NoError(t, err)
 
 	oid49_3 := asn1.ObjectIdentifier{1, 2, 643, 2, 2, 49, 3}
@@ -274,24 +297,28 @@ func TestCreateCertificate_WithExtraExtensions(t *testing.T) {
 	}
 
 	opts := &options.CreateCertificateOptions{
-		SerialNumber: big.NewInt(1),
-		Subject: options.SubjectOptions{
-			CommonName: "Extra Extensions Test",
-			Country:    []string{"RU"},
-		},
+		SerialNumber:    big.NewInt(1),
+		TTL:             365 * 24 * time.Hour,
 		IsCA:            true,
 		KeyUsage:        x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature,
 		ExtraExtensions: extraExts,
-		Crypto: options.CryptoOptions{
-			CurveOID:      curveOID,
-			Signer:        &internal.Signer{RawPrivateKey: priv, CurveOID: curveOID},
-			RandReader:    rand.Reader,
-			Algorithm:     x509gost.AlgoR341012_256,
-			SignAlgorithm: x509gost.AlgoR341012_256,
+		Subject: options.SubjectOptions{
+			Information: options.SubjetInformationOptions{
+				CommonName:   "Extra Extensions Test",
+				Country:      []string{"RU"},
+				Organization: []string{testOrganization},
+			},
+			PublicKeyOptions: options.SubjectPublicKeyOptions{
+				CurveOID:     curveOID,
+				Algorithm:    gost.AlgoR341012_256,
+				RawPublicKey: pub,
+			},
 		},
-		RawPrivateKey: priv,
-		RawPublicKey:  pub,
-		TTL:           365 * 24 * time.Hour,
+		Issuer: options.IssuerOptions{
+			RandReader:    rand.Reader,
+			Signer:        signer,
+			SignAlgorithm: gost.AlgoR341012_256,
+		},
 	}
 
 	cert, err := CreateCertificate(opts)
