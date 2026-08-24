@@ -41,13 +41,15 @@ func TestSignerSign(t *testing.T) {
 	digest, err := HashForGOST(x509gost.AlgoR341012_256, []byte("sign me"))
 	require.NoError(t, err)
 
-	sig, err := signer.Sign(rand.Reader, digest, nil)
+	digestBE := SwapEndianBytes(digest)
+
+	sig, err := signer.Sign(rand.Reader, digestBE, nil)
 	require.NoError(t, err)
 	assert.Len(t, sig, 64, "GOST R 34.10-2012 256-bit signature must be 64 bytes")
 
 	// The signature must independently verify against the signer's own
 	// public key.
-	ok, err := gost.VerifyDigestOnCurve(curve, pubRaw, digest, sig)
+	ok, err := gost.VerifyDigestOnCurve(curve, pubRaw, digestBE, sig)
 	require.NoError(t, err)
 	assert.True(t, ok, "signature must verify against the signer's public key")
 }

@@ -11,7 +11,7 @@ import (
 
 func TestBuildExtensions(t *testing.T) {
 	t.Run("empty produces nothing", func(t *testing.T) {
-		der, err := BuildExtensions(nil)
+		der, err := ConvertExtensionsToRawBytes(nil)
 		assert.NoError(t, err)
 		assert.Nil(t, der, "no extensions must produce nil DER")
 	})
@@ -25,7 +25,7 @@ func TestBuildExtensions(t *testing.T) {
 			},
 		}
 
-		der, err := BuildExtensions(extensions)
+		der, err := ConvertExtensionsToRawBytes(extensions)
 		require.NoError(t, err)
 		assert.NotEmpty(t, der)
 

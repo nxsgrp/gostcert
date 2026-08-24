@@ -209,7 +209,9 @@ func TestCreateCertificate_ReproducesOpenSSL(t *testing.T) {
 				digest, err := internal.HashForGOST(testCase.algo.ToX509(), parts.TBS)
 				require.NoError(t, err, "%s: hash TBS", label)
 
-				ok, err := gostcrypto.VerifyDigestOnCurve(curve, pubRaw, digest, parts.Sig)
+				digestBE = internal.SwapEndianBytes(digest)
+
+				ok, err := gostcrypto.VerifyDigestOnCurve(curve, pubRaw, digestBE, parts.Sig)
 				require.NoError(t, err, "%s: verify signature", label)
 				assert.True(t, ok, "%s: signature must verify against the shared public key", label)
 			}

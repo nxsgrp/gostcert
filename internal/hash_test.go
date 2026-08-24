@@ -58,8 +58,7 @@ func TestHashForGOST(t *testing.T) {
 			// ("alpha" in GOST R 34.10), so reversing it must yield the
 			// canonical big-endian known-answer value.
 			wantBE := mustHex(t, testCase.wantBE)
-			digestBE := reverseBytes(digestLE)
-			assert.Equal(t, wantBE, digestBE, "digest must be big-endian")
+			assert.Equal(t, wantBE, digestLE, "digest must be big-endian")
 		})
 	}
 }
@@ -67,12 +66,13 @@ func TestHashForGOST(t *testing.T) {
 func TestHashForGOST_Deterministic(t *testing.T) {
 	payload := []byte("some deterministic payload")
 
-	a, err := HashForGOST(x509gost.AlgoR341012_256, payload)
-	require.NoError(t, err)
-	b, err := HashForGOST(x509gost.AlgoR341012_256, payload)
+	aHashedSlices, err := HashForGOST(x509gost.AlgoR341012_256, payload)
 	require.NoError(t, err)
 
-	assert.Equal(t, a, b, "hashing the same input twice must yield the same digest")
+	bHashedSlices, err := HashForGOST(x509gost.AlgoR341012_256, payload)
+	require.NoError(t, err)
+
+	assert.Equal(t, aHashedSlices, bHashedSlices, "hashing the same input twice must yield the same digest")
 }
 
 func TestHashForGOST_UnknownAlgorithm(t *testing.T) {
@@ -95,15 +95,6 @@ func TestGostAlgorithmToHash(t *testing.T) {
 
 	_, err := GostAlgorithmToHash(x509gost.GOSTAlgorithm(999))
 	assert.Error(t, err, "unknown algorithm must return an error")
-}
-
-// reverseBytes returns a copy of b with the byte order reversed.
-func reverseBytes(b []byte) []byte {
-	out := make([]byte, len(b))
-	for i := range b {
-		out[len(b)-1-i] = b[i]
-	}
-	return out
 }
 
 func mustHex(t *testing.T, s string) []byte {

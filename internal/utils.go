@@ -13,3 +13,13 @@ func ConcatBytes(parts ...[]byte) []byte {
 	}
 	return out
 }
+
+// SwapEndianBytes ...
+func SwapEndianBytes(data []byte) []byte {
+	swapSlice := make([]byte, len(data))
+	for i := range data {
+		swapSlice[len(data)-1-i] = data[i]
+	}
+
+	return swapSlice
+}
