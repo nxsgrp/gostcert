@@ -4,7 +4,7 @@ Issuing, parsing, revoking and validating GOST X.509 certificates in pure Go.
 
 Covers certificate **issuance**, **CRLs** and **PKCS#10** requests per
 R 1323565.1.023-2018, plus **parsing**, **revocation** and **validity checking**.
-GOST primitives and certificate parsing come from `tarantool/go-gostcrypto`.
+GOST primitives and certificate parsing come from [`tarantool/go-gostcrypto`].
 
 > **Status: work in progress (skeleton).**
 

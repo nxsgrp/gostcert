@@ -12,13 +12,13 @@ import (
 // The function delegates to x509gost.ParseCertificate which handles both GOST
 // and non-GOST certificates transparently.
 func ParseCertificate(der []byte) (*Certificate, error) {
-	gc, err := x509gost.ParseCertificate(der)
+	gostCert, err := x509gost.ParseCertificate(der)
 	if err != nil {
 		return nil, fmt.Errorf("gostcert: parse: %w", err)
 	}
 
 	cert := &Certificate{
-		cert: gc,
+		cert: gostCert,
 	}
 
 	return cert, nil
